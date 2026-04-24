@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/device_list_controller.dart';
+import '../../pairing/presentation/pairing_page.dart';
 
 class DeviceListPage extends ConsumerWidget {
   const DeviceListPage({super.key});
@@ -22,7 +23,13 @@ class DeviceListPage extends ConsumerWidget {
                   const Text('还没有设备'),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const PairingPage(),
+                        ),
+                      );
+                    },
                     child: const Text('添加设备'),
                   ),
                 ],
