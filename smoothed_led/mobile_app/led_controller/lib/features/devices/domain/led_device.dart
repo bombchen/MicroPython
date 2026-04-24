@@ -36,4 +36,28 @@ class LedDevice {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is LedDevice &&
+            other.id == id &&
+            other.name == name &&
+            other.ipAddress == ipAddress &&
+            other.lastSeenAt == lastSeenAt &&
+            other.lastKnownStatus == lastKnownStatus &&
+            other.createdAt == createdAt &&
+            other.updatedAt == updatedAt;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+        id,
+        name,
+        ipAddress,
+        lastSeenAt,
+        lastKnownStatus,
+        createdAt,
+        updatedAt,
+      );
 }

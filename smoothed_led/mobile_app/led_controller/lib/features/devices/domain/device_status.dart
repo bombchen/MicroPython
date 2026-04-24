@@ -12,4 +12,16 @@ class DeviceStatus {
   final EffectMode mode;
   final int brightness;
   final DeviceConnectionState connectionState;
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        other is DeviceStatus &&
+            other.mode == mode &&
+            other.brightness == brightness &&
+            other.connectionState == connectionState;
+  }
+
+  @override
+  int get hashCode => Object.hash(mode, brightness, connectionState);
 }
