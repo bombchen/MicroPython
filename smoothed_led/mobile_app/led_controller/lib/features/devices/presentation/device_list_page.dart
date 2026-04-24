@@ -43,7 +43,7 @@ class DeviceListPage extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('加载失败: $error')),
+        error: (error, _) => const Center(child: Text('加载设备失败')),
       ),
     );
   }
