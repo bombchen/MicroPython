@@ -27,7 +27,22 @@ void main() {
     await repository.saveDevice(device);
     final devices = await repository.loadDevices();
 
+    expect(devices.single.id, 'device-1');
     expect(devices.single.name, '客厅灯带');
     expect(devices.single.ipAddress, '192.168.1.23');
+    expect(devices.single.lastSeenAt, DateTime(2026, 4, 24, 21));
+    expect(devices.single.lastKnownStatus.brightness, 180);
+    expect(devices.single.lastKnownStatus.mode, EffectMode.rainbow);
+    expect(devices.single.lastKnownStatus.connectionState, DeviceConnectionState.online);
+  });
+
+  test('损坏的持久化数据会安全降级为空列表', () async {
+    SharedPreferences.setMockInitialValues({
+      'registered_devices': 'not valid json',
+    });
+
+    final repository = SharedPrefsDeviceRepository();
+
+    await expectLater(repository.loadDevices(), completion(isEmpty));
   });
 }

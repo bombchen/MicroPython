@@ -6,14 +6,23 @@ class LocalDeviceStore {
   static const _devicesKey = 'registered_devices';
 
   Future<List<Map<String, dynamic>>> readAll() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_devicesKey);
-    if (raw == null) return [];
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_devicesKey);
+      if (raw == null) return [];
 
-    final decoded = jsonDecode(raw) as List<dynamic>;
-    return decoded
-        .map((item) => Map<String, dynamic>.from(item as Map))
-        .toList();
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return [];
+
+      final result = <Map<String, dynamic>>[];
+      for (final item in decoded) {
+        if (item is! Map) return [];
+        result.add(Map<String, dynamic>.from(item));
+      }
+      return result;
+    } catch (_) {
+      return [];
+    }
   }
 
   Future<void> writeAll(List<Map<String, dynamic>> devices) async {

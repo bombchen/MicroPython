@@ -12,15 +12,24 @@ class SharedPrefsDeviceRepository implements DeviceRepository {
 
   @override
   Future<List<LedDevice>> loadDevices() async {
-    final items = await _store.readAll();
-    return items.map(_fromMap).toList();
+    try {
+      final items = await _store.readAll();
+      return items.map(_fromMap).toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   @override
   Future<void> saveDevice(LedDevice device) async {
     final items = await _store.readAll();
-    items.removeWhere((item) => item['id'] == device.id);
-    items.add(_toMap(device));
+    final existingIndex = items.indexWhere((item) => item['id'] == device.id);
+    final mapped = _toMap(device);
+    if (existingIndex == -1) {
+      items.add(mapped);
+    } else {
+      items[existingIndex] = mapped;
+    }
     await _store.writeAll(items);
   }
 
