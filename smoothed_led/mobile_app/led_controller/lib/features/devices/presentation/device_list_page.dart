@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/device_list_controller.dart';
 
-export '../application/device_list_controller.dart';
-
 class DeviceListPage extends ConsumerWidget {
   const DeviceListPage({super.key});
 
