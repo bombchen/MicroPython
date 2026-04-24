@@ -1,6 +1,8 @@
 import 'pairing_step.dart';
 
 class PairingState {
+  static const Object _unset = Object();
+
   const PairingState({
     required this.step,
     this.ssid = '',
@@ -19,15 +21,19 @@ class PairingState {
     PairingStep? step,
     String? ssid,
     String? password,
-    String? errorMessage,
-    String? resolvedIpAddress,
+    Object? errorMessage = _unset,
+    Object? resolvedIpAddress = _unset,
   }) {
     return PairingState(
       step: step ?? this.step,
       ssid: ssid ?? this.ssid,
       password: password ?? this.password,
-      errorMessage: errorMessage,
-      resolvedIpAddress: resolvedIpAddress ?? this.resolvedIpAddress,
+      errorMessage: identical(errorMessage, _unset)
+          ? this.errorMessage
+          : errorMessage as String?,
+      resolvedIpAddress: identical(resolvedIpAddress, _unset)
+          ? this.resolvedIpAddress
+          : resolvedIpAddress as String?,
     );
   }
 }

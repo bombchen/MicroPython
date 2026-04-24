@@ -2,6 +2,7 @@ import '../domain/pairing_state.dart';
 import '../domain/pairing_step.dart';
 
 class PairingController {
+  // The later pairing steps are reserved for the approved follow-up tasks.
   PairingState _state = const PairingState(step: PairingStep.prepare);
 
   PairingState get state => _state;
