@@ -1,60 +1,60 @@
-# Flutter LED Controller Design
+# Flutter LED 控制器设计文档
 
-Date: 2026-04-24
+日期：2026-04-24
 
-## 1. Goal
+## 1. 目标
 
-Build a Flutter Android app for controlling ESP8266 devices running the `smoothed_led` MicroPython firmware.
+开发一个基于 Flutter 的 Android APP，用于控制运行 `smoothed_led` MicroPython 固件的 ESP8266 设备。
 
-The app must cover two core jobs:
+该 APP 需要覆盖两类核心任务：
 
-1. First-time device onboarding through the firmware's existing AP + UDP configuration flow.
-2. Daily LAN control of registered devices through the firmware's existing UDP control commands.
+1. 通过固件现有的 AP + UDP 配置流程完成设备首次配网。
+2. 在局域网内通过固件现有的 UDP 控制协议完成日常控制。
 
-This is a `v1` design for a publishable first release, not a prototype and not a near-production enterprise build.
+这是一份面向 `v1` 的可发布首版设计文档，不是演示原型，也不是追求企业级完整度的近生产级方案。
 
-## 2. Fixed Scope
+## 2. 固定范围
 
-### In scope
+### 2.1 范围内
 
-- Android-first release.
-- Flutter app implementation.
-- Semi-automatic onboarding flow.
-- Multiple devices supported in a flat list.
-- Device registration during successful onboarding.
-- LAN-only control.
-- Single-device control screen with medium-strength state feedback.
-- Device rename and local record deletion.
-- Help and troubleshooting content for onboarding and network issues.
+- Android 优先发布。
+- 使用 Flutter 开发。
+- 半自动配网流程。
+- 支持多设备，但仅平铺列表，不做分组。
+- 配网成功后自动登记设备。
+- 仅支持局域网内控制。
+- 单设备控制页采用中等强度状态反馈。
+- 支持设备重命名与本地记录删除。
+- 提供配网帮助、网络异常排查与权限说明。
 
-### Out of scope
+### 2.2 范围外
 
-- iPhone-first behavior or iOS-specific onboarding guarantees.
-- Automatic LAN device discovery.
-- Manual IP entry.
-- Device groups or rooms.
-- Remote control over the internet.
-- Scenes, favorites, or batch control.
-- Color picker or custom color authoring.
-- Firmware changes as part of this app `v1`.
+- iPhone 优先，或为 iOS 单独保证首版配网体验。
+- 通用局域网自动发现。
+- 手动输入 IP 添加设备。
+- 房间、分组、场景。
+- 互联网远程控制。
+- 收藏、预设、批量控制。
+- 颜色选择器或自定义颜色编辑。
+- 在本次 APP `v1` 中修改固件行为。
 
-## 3. Firmware Constraints
+## 3. 固件约束
 
-The design must match the current firmware behavior documented in `README.md`.
+设计必须严格匹配当前 `README.md` 中记录的固件行为。
 
-### Configuration mode
+### 3.1 配置模式
 
-- Device exposes AP `LED_Config`.
-- App must work with UDP port `8889`.
-- Supported config commands:
+- 设备会开启 AP：`LED_Config`
+- APP 需要通过 UDP `8889` 端口完成配置
+- 当前支持的配置命令：
   - `config:SSID:PASSWORD`
   - `status`
   - `list`
 
-### Control mode
+### 3.2 控制模式
 
-- Device listens on UDP port `8888`.
-- Supported control commands:
+- 设备在 UDP `8888` 端口监听控制命令
+- 当前支持的控制命令：
   - `mode:<effect>`
   - `mode:next`
   - `mode:prev`
@@ -62,7 +62,7 @@ The design must match the current firmware behavior documented in `README.md`.
   - `status`
   - `help`
 
-### Supported effect set
+### 3.3 支持的灯效
 
 - `rainbow`
 - `breath`
@@ -73,220 +73,220 @@ The design must match the current firmware behavior documented in `README.md`.
 - `sparkle`
 - `snake`
 
-## 4. Product Direction
+## 4. 产品方向
 
-The app follows a device-list-first information architecture.
+APP 采用“设备列表优先”的信息架构。
 
-Reasoning:
+原因如下：
 
-- It fits the chosen multi-device-without-groups scope.
-- It keeps first-time onboarding contained in an explicit flow.
-- It scales cleanly later if firmware capabilities expand.
-- It avoids promising dashboard-level capabilities the firmware does not support yet.
+- 它最贴合“多设备但不分组”的已确认范围。
+- 能把首次配网流程收束在一个独立向导里。
+- 如果后续固件能力扩展，结构也能平滑演进。
+- 不会在首页层面承诺当前固件并不支持的控制能力。
 
-## 5. Information Architecture
+## 5. 信息架构
 
-The app consists of four top-level areas:
+APP 由四个顶层区域组成：
 
-1. Device List
-2. Add Device Wizard
-3. Device Control
-4. Settings and Help
+1. 设备列表
+2. 添加设备向导
+3. 设备控制页
+4. 设置与帮助
 
-### 5.1 Device List
+### 5.1 设备列表
 
-This is the default home screen.
+这是默认首页。
 
-Responsibilities:
+职责：
 
-- Show all registered devices.
-- Show latest known online state.
-- Show latest known IP if available.
-- Show latest sync time.
-- Provide entry to add a device.
-- Provide navigation into a single device control screen.
+- 展示所有已登记设备
+- 展示最近一次已知在线状态
+- 展示最近一次已知 IP
+- 展示最近同步时间
+- 提供“添加设备”入口
+- 提供进入单设备控制页的入口
 
-Behavior:
+行为：
 
-- If no device exists, show a strong empty state with an onboarding CTA.
-- If devices exist, show them in a flat list.
-- No group, room, or dashboard abstraction in `v1`.
+- 如果当前没有设备，则展示明确的空状态页和配网入口
+- 如果已有设备，则以平铺列表展示
+- `v1` 不引入房间、分组或总控台抽象
 
-### 5.2 Add Device Wizard
+### 5.2 添加设备向导
 
-This is a dedicated onboarding flow for first-time setup.
+这是首配专用流程。
 
-Responsibilities:
+职责：
 
-- Explain what the user is about to do.
-- Guide the user to connect to `LED_Config`.
-- Collect target WiFi credentials.
-- Send the configuration over UDP.
-- Wait for device reboot and network return.
-- Register the device locally when onboarding succeeds.
+- 告知用户当前即将执行的操作
+- 引导用户连接 `LED_Config`
+- 收集目标家庭 WiFi 的信息
+- 通过 UDP 发送配置
+- 等待设备重启并重新入网
+- 成功后将设备登记到本地列表
 
-### 5.3 Device Control
+### 5.3 设备控制页
 
-This is a single-device screen.
+这是单设备控制页面。
 
-Responsibilities:
+职责：
 
-- Show device identity and connectivity state.
-- Fetch current device state when entering the screen.
-- Allow effect switching.
-- Allow brightness changes.
-- Support `next` and `prev` actions.
-- Support manual refresh.
-- Support rename and local delete.
+- 展示设备身份与连接状态
+- 页面进入时拉取当前设备状态
+- 支持切换灯效
+- 支持调整亮度
+- 支持 `next` 和 `prev`
+- 支持手动刷新状态
+- 支持重命名与删除本地设备记录
 
-### 5.4 Settings and Help
+### 5.4 设置与帮助
 
-Responsibilities:
+职责：
 
-- Explain permissions and Android network behavior.
-- Provide onboarding troubleshooting.
-- Provide network troubleshooting.
-- Provide app info and version info.
+- 解释权限与 Android 网络行为
+- 提供配网失败排查
+- 提供网络异常帮助
+- 展示 APP 信息与版本信息
 
-## 6. Key User Flows
+## 6. 关键用户流程
 
-### 6.1 First-Time Onboarding Flow
+### 6.1 首次配网流程
 
-1. User opens app.
-2. User sees empty state on Device List.
-3. User taps `Add Device`.
-4. App enters guided onboarding.
-5. App explains that the device exposes `LED_Config`.
-6. App opens Android WiFi settings or guided system handoff.
-7. User connects to `LED_Config`.
-8. User returns to app and confirms continuation.
-9. App collects home WiFi SSID and password.
-10. App sends `config:SSID:PASSWORD` to UDP `8889`.
-11. App waits for reboot and network return.
-12. App performs a pairing-scoped LAN resolution step to identify the newly onboarded device IP.
-13. On success, app registers the device locally and returns to Device List.
+1. 用户打开 APP。
+2. 用户在设备列表页看到空状态。
+3. 用户点击 `添加设备`。
+4. APP 进入引导式配网流程。
+5. APP 解释设备会暴露 `LED_Config` 热点。
+6. APP 打开 Android WiFi 设置页或引导用户切换到系统网络页。
+7. 用户连接 `LED_Config`。
+8. 用户返回 APP 并确认继续。
+9. APP 收集家庭 WiFi 的 SSID 和密码。
+10. APP 向 UDP `8889` 发送 `config:SSID:PASSWORD`。
+11. APP 等待设备重启并重新进入局域网。
+12. APP 在当前配网会话内执行一次受限的局域网解析，用来识别刚刚完成配网的设备 IP。
+13. 成功后 APP 将设备登记到本地，并返回设备列表页。
 
-### 6.2 Daily Control Flow
+### 6.2 日常控制流程
 
-1. User opens Device List.
-2. User taps a registered device.
-3. App enters Device Control screen.
-4. App requests `status`.
-5. App renders current mode, brightness, and online state.
-6. User sends mode or brightness commands.
-7. App refreshes status after actions.
-8. App surfaces success, timeout, or offline feedback.
+1. 用户打开设备列表页。
+2. 用户点击某个已登记设备。
+3. APP 进入设备控制页。
+4. APP 请求 `status`。
+5. APP 展示当前模式、亮度和在线状态。
+6. 用户发送模式切换或亮度调整命令。
+7. APP 在操作后刷新一次状态。
+8. APP 明确反馈成功、超时或离线状态。
 
-## 7. Onboarding UX Design
+## 7. 配网体验设计
 
-The onboarding flow must be more explicit than a minimal wizard because Android WiFi handoff is the highest-risk interaction in `v1`.
+由于 Android WiFi 切换是 `v1` 中最容易出问题的环节，因此配网流程必须比最小向导更显性、更可恢复。
 
-### 7.1 Wizard Shape
+### 7.1 向导形态
 
-Use a visible step-based guided task flow with progress states:
+采用明确的步骤式任务流，并展示进度状态：
 
-1. Prepare device
-2. Connect to `LED_Config`
-3. Return to app
-4. Enter home WiFi
-5. Wait for reboot and finish
+1. 准备设备
+2. 连接 `LED_Config`
+3. 返回 APP
+4. 输入家庭 WiFi
+5. 等待重启并完成
 
-### 7.2 UX Principles
+### 7.2 交互原则
 
-- Do not pretend WiFi switching is fully automatic.
-- Always show the current step and the next action.
-- Give the user explicit buttons for system WiFi handoff and manual continuation.
-- Keep the user in the flow after failures instead of ejecting them to the home screen.
-- Preserve entered SSID where possible on retry.
+- 不假装 WiFi 切换可以完全自动完成
+- 始终明确展示当前步骤和下一步动作
+- 提供系统 WiFi 跳转按钮和“我已连接，继续”这类显式操作
+- 出错后停留在当前流程内，不直接把用户踢回首页
+- 在允许的前提下保留已输入 SSID，便于重试
 
-### 7.3 Required Guidance Content
+### 7.3 必须出现的引导文案
 
-The wizard must explicitly explain:
+向导必须明确告诉用户：
 
-- `LED_Config` may appear as a network without internet.
-- Android may switch back to another network automatically.
-- If `LED_Config` is missing, the device may already be connected elsewhere or not in config mode.
-- Returning to the app after connecting to AP is expected and normal.
+- `LED_Config` 可能会显示为“无互联网”的网络，这是正常现象
+- Android 可能会自动切回其他已保存 WiFi
+- 如果没有看到 `LED_Config`，设备可能不在配置模式，或已经连入其他网络
+- 连接设备热点后再返回 APP 是预期行为，不是异常流程
 
-### 7.4 Failure Recovery
+### 7.4 失败恢复
 
-The wizard must handle these cases with specific recovery actions:
+向导必须覆盖以下失败场景，并给出明确恢复动作：
 
-- Failed to connect to `LED_Config`
-  - Action: stay on current step and allow reopening WiFi settings.
-- Failed to send config command
-  - Action: allow retry from the same form.
-- Device did not return to LAN after reboot
-  - Action: allow retry wait and allow restarting onboarding.
+- 连接 `LED_Config` 失败
+  - 动作：停留在当前步骤，允许再次打开 WiFi 设置
+- 发送配置命令失败
+  - 动作：保留当前表单内容，允许原地重试
+- 设备重启后未重新回到局域网
+  - 动作：允许继续等待一次，或重新开始配网
 
-### 7.5 Pairing-Scoped Device Resolution
+### 7.5 配网会话内的设备 IP 解析
 
-`v1` does not support generic LAN auto-discovery as a product feature, but onboarding still needs one narrow resolution step to capture the IP of the device that just rebooted.
+`v1` 不支持“通用局域网自动发现”作为产品功能，但配网成功后仍然需要一个受限步骤来获得设备 IP。
 
-Rule:
+规则如下：
 
-- After sending WiFi credentials and waiting for reboot, the app may perform a short-lived, pairing-scoped UDP broadcast probe on control port `8888`.
-- The probe is only used inside an active onboarding session.
-- The first valid device response received during that pairing session is treated as the newly onboarded device.
-- The responding source IP becomes the stored `ipAddress` for the registered device.
+- APP 在发送 WiFi 配置并等待设备重启后，可以在当前配网会话内发起一次短时 UDP 广播探测，目标端口为 `8888`
+- 该探测只允许在一个进行中的配网会话内使用
+- 在配网时间窗口内，第一个返回有效响应的设备被视为刚刚完成配网的目标设备
+- 响应源 IP 将被保存为该设备的 `ipAddress`
 
-This is not treated as general device discovery because:
+之所以不把它定义为“通用自动发现”，原因是：
 
-- It is only triggered immediately after an explicit onboarding flow.
-- It is bounded to a short pairing window.
-- It does not scan or maintain a list of arbitrary LAN devices outside onboarding.
+- 它只会在用户主动执行配网之后触发
+- 它只在一个很短的配网时间窗口内存在
+- 它不会在正常使用时扫描或维护任意局域网设备列表
 
-## 8. Device Control UX Design
+## 8. 设备控制页设计
 
-The control page should be practical and aligned with current firmware capabilities.
+控制页应该务实，且严格贴合当前固件能力。
 
-### 8.1 Required Elements
+### 8.1 必备元素
 
-- Device name
-- Latest known IP
-- Online/offline/timeout state
-- Last sync time
-- Current mode display
-- Brightness slider
-- Effect selector for all supported firmware effects
-- `Previous effect`
-- `Next effect`
-- `Refresh status`
-- Rename device
-- Delete device record
+- 设备名称
+- 最近一次已知 IP
+- 在线 / 离线 / 超时状态
+- 最近同步时间
+- 当前模式展示
+- 亮度滑杆
+- 所有已支持灯效的选择区
+- `上一个灯效`
+- `下一个灯效`
+- `刷新状态`
+- 重命名设备
+- 删除设备记录
 
-### 8.2 Explicit Non-Goals
+### 8.2 明确不做
 
-Do not include:
+以下内容不进入 `v1` 控制页：
 
-- Color editor
-- Scene editor
-- Group control
-- Favorite presets
-- Any control model not backed by firmware behavior
+- 颜色编辑器
+- 场景编辑器
+- 组控制
+- 收藏预设
+- 任何当前固件并不支持的控制抽象
 
-## 9. State Feedback Model
+## 9. 状态反馈模型
 
-The app uses medium-strength feedback, not real-time syncing.
+APP 使用“中反馈”模型，而不是伪实时同步。
 
-### Device List
+### 9.1 设备列表
 
-- Refresh latest known state on entering the screen.
-- Refresh after onboarding returns.
-- Refresh on explicit user action.
-- Do not run aggressive background polling.
+- 页面进入时刷新最近一次已知状态
+- 配网页返回后刷新
+- 用户主动下拉或点击刷新时更新
+- 不做高频后台轮询
 
-### Device Control
+### 9.2 设备控制页
 
-- Request `status` when entering the screen.
-- Refresh after each user control action.
-- Surface `online`, `offline`, `sending`, and `timeout` states clearly.
+- 页面进入时请求一次 `status`
+- 每次用户控制操作后刷新一次状态
+- 明确区分 `online`、`offline`、`sending`、`timeout`
 
-This model is intentionally modest because the firmware uses UDP and does not provide reliable push state.
+之所以采用这种方式，是因为当前固件基于 UDP，且没有可靠的服务端推送状态机制。
 
-## 10. Data Model
+## 10. 数据模型
 
-### 10.1 Core Entities
+### 10.1 核心实体
 
 #### LedDevice
 
@@ -317,7 +317,7 @@ This model is intentionally modest because the firmware uses UDP and does not pr
 
 #### EffectMode
 
-Enum containing:
+枚举值包含：
 
 - `rainbow`
 - `breath`
@@ -328,26 +328,26 @@ Enum containing:
 - `sparkle`
 - `snake`
 
-## 11. App Architecture
+## 11. APP 架构
 
-Use a simple layered architecture that keeps UI, flow orchestration, protocol details, and storage separate.
+采用简单的分层架构，把 UI、流程编排、协议细节和存储职责分开。
 
 ### 11.1 Presentation
 
-Contains pages, widgets, and view-level state binding.
+负责页面、组件和视图层状态绑定。
 
-Examples:
+例如：
 
-- Device List page
-- Add Device wizard pages
-- Device Control page
-- Settings and help pages
+- 设备列表页
+- 添加设备向导页
+- 设备控制页
+- 设置与帮助页
 
 ### 11.2 Application
 
-Contains use-case orchestration and flow coordination.
+负责用例编排和流程协调。
 
-Examples:
+例如：
 
 - `PairingCoordinator`
 - `DeviceRegistrationUseCase`
@@ -356,9 +356,9 @@ Examples:
 
 ### 11.3 Domain
 
-Contains core models, enums, and repository/service interfaces.
+负责核心模型、枚举和仓储 / 服务接口定义。
 
-Examples:
+例如：
 
 - `LedDevice`
 - `DeviceStatus`
@@ -367,39 +367,39 @@ Examples:
 
 ### 11.4 Infrastructure
 
-Contains concrete implementations.
+负责具体实现。
 
-Examples:
+例如：
 
-- UDP transport
-- Android platform/network integration
-- Local persistence
-- Logging implementation
+- UDP 通信
+- Android 平台 / 网络能力桥接
+- 本地持久化
+- 日志实现
 
 ### 11.5 Shared
 
-Contains shared constants, result wrappers, error types, and reusable UI state enums.
+负责共享常量、结果类型、错误类型和可复用的 UI 状态枚举。
 
-## 12. State Management
+## 12. 状态管理
 
-Use a lightweight, explicit state management solution. `Riverpod` is the recommended default.
+状态管理采用轻量、显式的方案即可，推荐默认使用 `Riverpod`。
 
-Reasoning:
+原因：
 
-- Good fit for Flutter app layering.
-- Keeps device list state, onboarding state, and control state separate.
-- Works well with async network actions and local persistence.
+- 比较适合 Flutter 分层结构
+- 能把设备列表、配网向导和控制页状态清晰拆开
+- 能较好处理异步网络请求与本地持久化
 
-### 12.1 Required State Separation
+### 12.1 必须拆分的状态域
 
-- Device list state
-- Pairing wizard state
-- Device control state
-- Settings/help state
+- 设备列表状态
+- 配网向导状态
+- 单设备控制状态
+- 设置 / 帮助状态
 
-### 12.2 Pairing State Machine
+### 12.2 配网状态机
 
-The pairing flow must be modeled explicitly as a state machine:
+配网流程必须建模成显式状态机：
 
 - `idle`
 - `waitingApJoin`
@@ -409,9 +409,9 @@ The pairing flow must be modeled explicitly as a state machine:
 - `success`
 - `failure`
 
-### 12.3 Device Control State
+### 12.3 控制页状态
 
-The control screen must distinguish:
+控制页至少要能区分：
 
 - `loading`
 - `ready`
@@ -419,142 +419,142 @@ The control screen must distinguish:
 - `timeout`
 - `offline`
 
-## 13. Networking Design
+## 13. 网络设计
 
-### 13.1 Pairing Transport
+### 13.1 配网传输
 
-- Use UDP for configuration on port `8889`.
-- Send configuration using the firmware command format exactly.
-- Support status checks where useful during onboarding.
+- 使用 UDP `8889` 端口进行配置
+- 严格按固件已有命令格式发送配置
+- 在需要时可使用 `status` 或 `list` 辅助配网过程
 
-### 13.2 Control Transport
+### 13.2 控制传输
 
-- Use UDP for control on port `8888`.
-- Support `status`, `mode:*`, `mode:next`, `mode:prev`, and `bright:*`.
+- 使用 UDP `8888` 端口进行控制
+- 支持 `status`、`mode:*`、`mode:next`、`mode:prev`、`bright:*`
 
-### 13.3 Pairing Resolution Transport
+### 13.3 配网后设备解析传输
 
-- After onboarding config is sent, the app may broadcast a short-lived `status` probe on UDP `8888`.
-- A valid response during the active pairing window is used to resolve the device IP.
-- If no valid response is received within the pairing timeout window, onboarding remains incomplete and recovery actions are shown.
+- 配网配置发送完成后，APP 可以在短时间内向 UDP `8888` 广播 `status` 探测
+- 活跃配网窗口中收到的有效响应用于识别该设备 IP
+- 如果在限定窗口内没有收到有效响应，则视为配网尚未完成，向用户展示恢复动作
 
-### 13.4 Reliability Expectations
+### 13.4 可靠性预期
 
-UDP is unreliable.
+UDP 天生不可靠。
 
-Therefore:
+因此：
 
-- Every critical action must have timeout behavior.
-- The UI must not imply guaranteed delivery.
-- Retry paths must be visible.
-- Success must be based on response evidence when available.
+- 每个关键操作都必须有超时处理
+- UI 不能表达“命令一定送达”
+- 重试路径必须对用户可见
+- 如果有响应证据，应以响应结果作为成功依据
 
-## 14. Persistence Design
+## 14. 持久化设计
 
-Persist the registered device list locally.
+本地持久化需要保存已登记设备列表。
 
-### Required stored fields
+### 必须保存的字段
 
-- Device identity
-- User-defined name
-- Latest known IP
-- Latest known status snapshot
-- Last sync time
+- 设备身份信息
+- 用户定义的设备名称
+- 最近一次已知 IP
+- 最近一次状态快照
+- 最近同步时间
 
-### Persistence responsibilities
+### 持久化职责
 
-- Keep registered devices across app restarts.
-- Support rename and delete.
-- Update latest known state after successful status pulls.
+- APP 重启后仍然保留已登记设备
+- 支持重命名与删除
+- 成功拉取状态后，更新最近一次设备状态
 
-## 15. Error Handling
+## 15. 错误处理
 
-Errors must be actionable, not just descriptive.
+错误提示必须是“可执行的”，而不只是报错文本。
 
-### 15.1 Onboarding Errors
+### 15.1 配网错误
 
-- Cannot find `LED_Config`
-- User did not switch networks successfully
-- Config send timeout
-- Device reboot timeout
-- Device did not become reachable on LAN
+- 找不到 `LED_Config`
+- 用户没有成功切换网络
+- 配置发送超时
+- 设备重启等待超时
+- 设备没有重新进入局域网
 
-Each must map to a next action such as:
+每种错误都要映射到明确的下一步动作，例如：
 
-- Retry current step
-- Reopen WiFi settings
-- Wait again
-- Restart onboarding
+- 重试当前步骤
+- 再次打开 WiFi 设置
+- 再等待一次
+- 重新开始配网
 
-### 15.2 Control Errors
+### 15.2 控制错误
 
-- Device offline
-- Device IP invalid or stale
-- UDP command timeout
-- Status read failure
+- 设备离线
+- 设备 IP 失效或过期
+- UDP 命令超时
+- 状态读取失败
 
-Each must map to a next action such as:
+每种错误都要映射到明确的下一步动作，例如：
 
-- Refresh
-- Return later
-- Remove and re-onboard device if necessary
+- 刷新状态
+- 稍后重试
+- 必要时删除设备并重新配网
 
-## 16. Permissions and Platform Concerns
+## 16. 权限与平台注意事项
 
-Because `v1` is Android-first, the app must include explicit handling for:
+由于 `v1` 以 Android 为优先平台，因此必须显式处理：
 
-- WiFi/network behavior explanations
-- App foreground/background transitions during onboarding
-- System settings handoff behavior
-- Required permissions and why they are needed
+- WiFi / 网络行为说明
+- 配网期间 APP 前后台切换
+- 系统设置页跳转行为
+- 所需权限以及这些权限为什么需要
 
-The settings/help area must explain these behaviors in plain language.
+设置与帮助页必须用普通用户能理解的语言解释这些内容。
 
-## 17. Testing Strategy
+## 17. 测试策略
 
-### 17.1 Unit Tests
+### 17.1 单元测试
 
-- Pairing state machine transitions
-- UDP command formatting
-- UDP response parsing
-- Device persistence behaviors
-- Effect mode mapping
+- 配网状态机状态流转
+- UDP 命令格式拼装
+- UDP 响应解析
+- 设备持久化行为
+- 灯效枚举映射
 
-### 17.2 Integration Tests
+### 17.2 集成测试
 
-- Device registration flow
-- Return from onboarding into Device List
-- Control screen state transitions
-- Error presentation for network failures
+- 设备登记流程
+- 从配网完成返回设备列表
+- 控制页状态切换
+- 网络失败时的错误展示链路
 
-### 17.3 Manual Verification
+### 17.3 手工验证
 
-Manual Android testing is required for:
+Android 真机验证必须覆盖：
 
-- WiFi settings handoff
-- Returning to app after network changes
-- Config send over UDP `8889`
-- Control send over UDP `8888`
-- Device reboot and reconnection timing
+- WiFi 设置跳转
+- 切换网络后返回 APP
+- UDP `8889` 配置发送
+- UDP `8888` 控制发送
+- 设备重启和重新入网时序
 
-## 18. Success Criteria
+## 18. 成功标准
 
-`v1` is successful when:
+当满足以下条件时，可认为 `v1` 达到目标：
 
-- A user can onboard a new ESP8266 device without external tools.
-- A successfully onboarded device appears in the device list.
-- A user can open a device control screen and reliably send supported commands on the same LAN.
-- The app gives understandable feedback when onboarding or control fails.
-- The product feels complete enough to publish as an Android first release.
+- 用户无需外部工具即可完成新设备配网
+- 成功配网的设备能够出现在设备列表中
+- 用户能在同一局域网内打开控制页并可靠发送已支持命令
+- 配网或控制失败时，APP 能给出可理解、可执行的反馈
+- 整体产品完成度足以作为 Android 首版发布
 
-## 19. Deferred Work
+## 19. 延后事项
 
-These are intentionally deferred beyond this design:
+以下内容明确延后到后续版本：
 
-- Automatic discovery protocol
-- Manual IP entry
-- iOS-specific onboarding design
-- Group and room model
-- Scenes and presets
-- Remote access architecture
-- Firmware upgrades or firmware-side protocol redesign
+- 通用自动发现协议
+- 手动 IP 添加
+- iOS 专属配网设计
+- 分组与房间模型
+- 场景与预设
+- 远程控制架构
+- 固件升级能力或固件协议重构
