@@ -22,4 +22,13 @@ void main() {
     expect(status.brightness, 180);
     expect(status.connectionState, DeviceConnectionState.online);
   });
+
+  test('无效 status 响应抛出 FormatException', () {
+    final protocol = UdpLedProtocol();
+
+    expect(
+      () => protocol.parseStatus('MODE:rainbow'),
+      throwsA(isA<FormatException>()),
+    );
+  });
 }
