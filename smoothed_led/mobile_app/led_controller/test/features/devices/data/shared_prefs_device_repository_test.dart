@@ -45,4 +45,14 @@ void main() {
 
     await expectLater(repository.loadDevices(), completion(isEmpty));
   });
+
+  test('仓储映射错误会向外抛出', () async {
+    SharedPreferences.setMockInitialValues({
+      'registered_devices': '[{"id":"device-1"}]',
+    });
+
+    final repository = SharedPrefsDeviceRepository();
+
+    await expectLater(repository.loadDevices(), throwsA(isA<TypeError>()));
+  });
 }

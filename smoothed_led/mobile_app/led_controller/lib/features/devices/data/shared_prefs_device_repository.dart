@@ -12,12 +12,8 @@ class SharedPrefsDeviceRepository implements DeviceRepository {
 
   @override
   Future<List<LedDevice>> loadDevices() async {
-    try {
-      final items = await _store.readAll();
-      return items.map(_fromMap).toList();
-    } catch (_) {
-      return [];
-    }
+    final items = await _store.readAll();
+    return items.map(_fromMap).toList();
   }
 
   @override
