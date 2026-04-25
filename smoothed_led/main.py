@@ -25,7 +25,10 @@ frame_count = 0
 anim_state = {}
 
 # 效果列表
-EFFECTS = ['rainbow','breath','fire','starry','wave','chase','sparkle','snake']
+EFFECTS = ('rainbow','breath','fire','starry','wave','chase','sparkle','snake')
+EFFECTS_TEXT = "|".join(EFFECTS)
+CONTROL_HELP_TEXT = f"mode:({EFFECTS_TEXT}|next|prev),bright:0-255,status"
+CONFIG_COMMANDS_TEXT = "Commands:config:SSID:PWD, status, list"
 
 # ==================== 工具函数 ====================
 def setb(c):return tuple(int(x*brightness/255) for x in c)
@@ -42,6 +45,26 @@ def init_anim():
 def get_mode_idx(m):
     try:return EFFECTS.index(m)
     except:return 0
+def clamp_u8(value):return max(0,min(255,int(value)))
+def parse_control_command(cmd):
+    cmd=cmd.strip().lower()
+    if cmd.startswith('mode:'):return('mode',cmd.split(':',1)[1])
+    if cmd.startswith('bright:'):
+        try:return('brightness',clamp_u8(cmd.split(':',1)[1]))
+        except:return('brightness_error',None)
+    if cmd=='status':return('status',None)
+    if cmd=='help':return('help',None)
+    return('error',None)
+def parse_config_command(cmd):
+    raw=cmd.strip()
+    cmd=raw.lower()
+    if cmd.startswith('config:'):
+        parts=raw.split(':',2)
+        if len(parts)==3:return('config',(parts[1],parts[2]))
+        return('error',None)
+    if cmd=='status':return('status',None)
+    if cmd=='list':return('list',None)
+    return('error',None)
 
 # ==================== WiFi 配置 ====================
 def save_cfg(ssid,pwd):
@@ -111,24 +134,25 @@ def config_mode():
             cmd=data.decode().strip().lower()
             print(f"<- {cmd}")
 
-            if cmd.startswith('config:'):
-                parts=cmd.split(':',2)
-                if len(parts)==3:
-                    s,p=parts[1],parts[2]
-                    print(f"Save: {s}")
-                    if save_cfg(s,p):
-                        sock.sendto(b"OK!Rebooting...",addr)
-                        time.sleep(1)
-                        machine.reset()
-                    else:sock.sendto(b"Save Failed",addr)
-                else:sock.sendto(b"Error: use config:SSID:PWD",addr)
-            elif cmd=='status':
+            cmd_type,payload=parse_config_command(cmd)
+
+            if cmd_type=='config':
+                s,p=payload
+                print(f"Save: {s}")
+                if save_cfg(s,p):
+                    sock.sendto(b"OK!Rebooting...",addr)
+                    time.sleep(1)
+                    machine.reset()
+                else:sock.sendto(b"Save Failed",addr)
+            elif cmd_type=='status':
                 sock.sendto(b"CONFIG_MODE",addr)
-            elif cmd=='list':
+            elif cmd_type=='list':
                 if ssids:
                     sock.sendto(f"WIFIS:{','.join(ssids)}".encode(),addr)
                 else:sock.sendto(b"Scanning...",addr)
-            else:sock.sendto(b"Commands:config:SSID:PWD, status, list",addr)
+            elif cmd.startswith('config:'):
+                sock.sendto(b"Error: use config:SSID:PWD",addr)
+            else:sock.sendto(CONFIG_COMMANDS_TEXT.encode(),addr)
             gc.collect()
         except:
             pass
@@ -161,8 +185,10 @@ def control_mode():
             print(f"<- {cmd}")
 
             global mode,brightness
-            if cmd.startswith('mode:'):
-                m=cmd.split(':')[1]
+            cmd_type,payload=parse_control_command(cmd)
+
+            if cmd_type=='mode':
+                m=payload
                 if m=='next':
                     mode=EFFECTS[(get_mode_idx(mode)+1)%len(EFFECTS)]
                     init_anim()
@@ -173,15 +199,15 @@ def control_mode():
                     mode=m
                     init_anim()
                 sock.sendto(f"OK:{mode}".encode(),addr)
-            elif cmd.startswith('bright:'):
-                try:
-                    brightness=max(0,min(255,int(cmd.split(':')[1])))
-                    sock.sendto(f"OK:{brightness}".encode(),addr)
-                except:sock.sendto(b"ERROR",addr)
-            elif cmd=='status':
+            elif cmd_type=='brightness':
+                brightness=payload
+                sock.sendto(f"OK:{brightness}".encode(),addr)
+            elif cmd_type=='brightness_error':
+                sock.sendto(b"ERROR",addr)
+            elif cmd_type=='status':
                 sock.sendto(f"MODE:{mode};BRIGHT:{brightness}".encode(),addr)
-            elif cmd=='help':
-                sock.sendto(f"mode:({'|'.join(EFFECTS)}|next|prev),bright:0-255,status".encode(),addr)
+            elif cmd_type=='help':
+                sock.sendto(CONTROL_HELP_TEXT.encode(),addr)
             else:sock.sendto(b"Error",addr)
             gc.collect()
         except:pass
