@@ -8,6 +8,10 @@ void main() {
 
     expect(find.text('配网帮助'), findsOneWidget);
     expect(find.text('去添加设备'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+      isNull,
+    );
 
     expect(find.text('配网步骤'), findsOneWidget);
     expect(find.text('连接设备热点 LED_Config'), findsOneWidget);
@@ -16,7 +20,17 @@ void main() {
     expect(find.text('常见故障'), findsOneWidget);
     expect(find.text('系统与权限说明'), findsOneWidget);
     expect(find.text('看不到 LED_Config'), findsNothing);
-
     expect(find.text('如果手机搜不到热点，请先确认设备刚上电。'), findsNothing);
+
+    await tester.tap(find.text('常见故障'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('看不到 LED_Config'), findsOneWidget);
+    expect(find.text('如果手机搜不到热点，请先确认设备刚上电。'), findsNothing);
+
+    await tester.tap(find.text('看不到 LED_Config'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('如果手机搜不到热点，请先确认设备刚上电。'), findsOneWidget);
   });
 }

@@ -30,90 +30,84 @@ class SettingsPage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('配网帮助')),
-      body: Theme(
-        data: Theme.of(context).copyWith(
-          visualDensity: const VisualDensity(horizontal: 0, vertical: -4),
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        child: ListTileTheme(
-          dense: true,
-          child: ListView(
-            padding: const EdgeInsets.all(12),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '用于首次配网和常见问题排查',
-                        style: textTheme.bodyMedium,
-                      ),
-                      const SizedBox(height: 6),
-                      FilledButton(
-                        onPressed: () {},
-                        child: const Text('去添加设备'),
-                      ),
-                    ],
-                  ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '用于首次配网和常见问题排查',
+                      style: textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    const FilledButton(
+                      onPressed: null,
+                      child: Text('去添加设备'),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 4),
-              ExpansionTile(
-                tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-                childrenPadding: const EdgeInsets.only(bottom: 4),
-                initiallyExpanded: true,
-                title: const Text('配网步骤'),
-                children: _steps
-                    .map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(item),
+            ),
+            const SizedBox(height: 4),
+            ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              childrenPadding: const EdgeInsets.only(bottom: 4),
+              initiallyExpanded: true,
+              title: const Text('配网步骤'),
+              children: _steps
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(item),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+            ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: const Text('常见故障'),
+              children: _faqItems
+                  .map(
+                    (item) => ExpansionTile(
+                      tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                      childrenPadding: const EdgeInsets.only(bottom: 4),
+                      title: Text(item.key),
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Text(item.value),
                         ),
+                      ],
+                    ),
+                  )
+                  .toList(),
+            ),
+            ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+              childrenPadding: const EdgeInsets.only(bottom: 4),
+              title: const Text('系统与权限说明'),
+              children: _systemNotes
+                  .map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(item),
                       ),
-                    )
-                    .toList(),
-              ),
-              ExpansionTile(
-                tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-                title: const Text('常见故障'),
-                children: _faqItems
-                    .map(
-                      (item) => ExpansionTile(
-                        tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-                        childrenPadding: const EdgeInsets.only(bottom: 4),
-                        title: Text(item.key),
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                            child: Text(item.value),
-                          ),
-                        ],
-                      ),
-                    )
-                    .toList(),
-              ),
-              ExpansionTile(
-                tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-                childrenPadding: const EdgeInsets.only(bottom: 4),
-                title: const Text('系统与权限说明'),
-                children: _systemNotes
-                    .map(
-                      (item) => Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(item),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ],
-          ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ],
         ),
       ),
     );

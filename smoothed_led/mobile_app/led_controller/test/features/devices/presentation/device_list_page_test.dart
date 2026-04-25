@@ -209,7 +209,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('配网帮助'), findsOneWidget);
-    expect(find.text('连接设备热点 LED_Config'), findsOneWidget);
+    expect(find.text('配网步骤'), findsOneWidget);
   });
 
   testWidgets('配网成功返回后刷新设备列表并提示成功', (tester) async {
