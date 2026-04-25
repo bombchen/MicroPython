@@ -4,6 +4,8 @@ import 'package:led_controller/features/settings/presentation/settings_page.dart
 
 void main() {
   testWidgets('帮助页展示结构化帮助中心内容', (tester) async {
+    final faqAnswerSnippet = find.textContaining('设备刚上电');
+
     await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
 
     expect(find.text('配网帮助'), findsOneWidget);
@@ -20,17 +22,17 @@ void main() {
     expect(find.text('常见故障'), findsOneWidget);
     expect(find.text('系统与权限说明'), findsOneWidget);
     expect(find.text('看不到 LED_Config'), findsNothing);
-    expect(find.text('如果手机搜不到热点，请先确认设备刚上电。'), findsNothing);
+    expect(faqAnswerSnippet, findsNothing);
 
     await tester.tap(find.text('常见故障'));
     await tester.pumpAndSettle();
 
     expect(find.text('看不到 LED_Config'), findsOneWidget);
-    expect(find.text('如果手机搜不到热点，请先确认设备刚上电。'), findsNothing);
+    expect(faqAnswerSnippet, findsNothing);
 
     await tester.tap(find.text('看不到 LED_Config'));
     await tester.pumpAndSettle();
 
-    expect(find.text('如果手机搜不到热点，请先确认设备刚上电。'), findsOneWidget);
+    expect(faqAnswerSnippet, findsOneWidget);
   });
 }
