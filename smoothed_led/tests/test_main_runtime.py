@@ -1,5 +1,6 @@
 import ast
 import importlib.util
+import math
 import sys
 import threading
 import time
@@ -234,6 +235,109 @@ def test_control_help_text_and_effects_constants(monkeypatch):
         module.CONTROL_HELP_TEXT
         == "mode:(rainbow|breath|fire|starry|wave|chase|sparkle|snake|next|prev),bright:0-255,status"
     )
+
+
+def test_wave_level_cardinal_angles(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+
+    assert module.wave_level(0) == 0
+    assert module.wave_level(90) == 255
+    assert module.wave_level(180) == 0
+    assert module.wave_level(270) == -255
+
+
+def test_animation_palettes(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+
+    assert module.FIRE_COLORS == ((255, 0, 0), (255, 80, 0), (255, 160, 0))
+    assert module.STARRY_COLORS == (
+        (255, 255, 255),
+        (200, 200, 255),
+        (255, 255, 200),
+    )
+    assert module.SPARKLE_COLORS[-1] == (255, 255, 255)
+
+
+class _FakeNeoPixel:
+    def __init__(self, count):
+        self.pixels = [(0, 0, 0)] * count
+        self.write_calls = 0
+
+    def __setitem__(self, index, value):
+        self.pixels[index] = value
+
+    def __getitem__(self, index):
+        return self.pixels[index]
+
+    def fill(self, value):
+        self.pixels = [value] * len(self.pixels)
+
+    def write(self):
+        self.write_calls += 1
+
+
+def test_rainbow_renders_a_frame(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    fake_np = _FakeNeoPixel(module.LED_COUNT)
+
+    monkeypatch.setattr(module.time, "sleep_ms", lambda *_args, **_kwargs: None, raising=False)
+    module.np = fake_np
+    module.frame_count = 0
+
+    module.rainbow()
+
+    assert module.frame_count == 1
+    assert fake_np.write_calls == 1
+    assert any(pixel != (0, 0, 0) for pixel in fake_np.pixels)
+
+
+def test_wave_renders_sine_like_frame(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    fake_np = _FakeNeoPixel(30)
+    original_wave_level = module.wave_level
+    wave_level_calls = []
+
+    monkeypatch.setattr(module.time, "sleep_ms", lambda *_args, **_kwargs: None, raising=False)
+    monkeypatch.setattr(
+        module,
+        "wave_level",
+        lambda angle: wave_level_calls.append(angle) or original_wave_level(angle),
+    )
+    module.np = fake_np
+    module.brightness = 255
+    module.LED_COUNT = 30
+    module.frame_count = 0
+
+    module.wave()
+
+    def expected_pixel(index):
+        angle = (index * 12) % 360
+        level = math.sin(math.radians(angle))
+        if level > 0:
+            return (int(255 * (1 - level)), int(255 * level), 0)
+        return (0, int(255 * (1 + level)), int(255 * (-level)))
+
+    def assert_pixel_close(actual, expected, tolerance=1):
+        assert len(actual) == len(expected)
+        for actual_channel, expected_channel in zip(actual, expected):
+            assert abs(actual_channel - expected_channel) <= tolerance
+
+    assert module.frame_count == 1
+    assert fake_np.write_calls == 1
+    assert len(wave_level_calls) == module.LED_COUNT
+    assert wave_level_calls[:4] == [0, 12, 24, 36]
+    assert_pixel_close(fake_np[0], expected_pixel(0))
+    assert_pixel_close(fake_np[7], expected_pixel(7))
+    assert fake_np[15] == expected_pixel(15)
+    assert_pixel_close(fake_np[16], expected_pixel(16))
+    assert_pixel_close(fake_np[23], expected_pixel(23))
+
+
+def test_dynamic_import_not_used_for_math():
+    source = MAIN_PATH.read_text()
+
+    assert "__import__('math')" not in source
+    assert '__import__("math")' not in source
 
 
 def test_control_mode_returns_error_for_malformed_brightness(monkeypatch):

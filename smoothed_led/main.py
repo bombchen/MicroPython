@@ -3,6 +3,7 @@ import neopixel
 from machine import Pin
 import time
 import random
+import math
 import network
 import socket
 import gc
@@ -23,6 +24,19 @@ brightness = 180
 np = None
 frame_count = 0
 anim_state = {}
+FIRE_COLORS = ((255, 0, 0), (255, 80, 0), (255, 160, 0))
+STARRY_COLORS = ((255, 255, 255), (200, 200, 255), (255, 255, 200))
+CHASE_COLORS = ((255, 0, 0), (0, 255, 0), (0, 0, 255))
+SPARKLE_COLORS = (
+    (255, 0, 0),
+    (0, 255, 0),
+    (0, 0, 255),
+    (255, 255, 0),
+    (255, 0, 255),
+    (0, 255, 255),
+    (255, 255, 255),
+)
+WAVE_LEVELS = tuple(int(round(math.sin(math.radians(angle))*255)) for angle in range(91))
 
 # 效果列表
 EFFECTS = ('rainbow','breath','fire','starry','wave','chase','sparkle','snake')
@@ -46,6 +60,12 @@ def get_mode_idx(m):
     try:return EFFECTS.index(m)
     except:return 0
 def clamp_u8(value):return max(0,min(255,int(value)))
+def wave_level(angle):
+    angle%=360
+    if angle<=90:return WAVE_LEVELS[angle]
+    if angle<=180:return WAVE_LEVELS[180-angle]
+    if angle<=270:return -WAVE_LEVELS[angle-180]
+    return -WAVE_LEVELS[360-angle]
 def parse_control_command(cmd):
     cmd=cmd.strip().lower()
     if cmd.startswith('mode:'):return('mode',cmd.split(':',1)[1])
@@ -233,37 +253,36 @@ def breath():
     time.sleep_ms(20)
 def fire():
     global frame_count;frame_count+=1;np.fill((0,0,0))
-    c=[(255,0,0),(255,80,0),(255,160,0)]
     for i in range(LED_COUNT):
-        if rnd()<0.3:np[i]=setb(c[random.getrandbits(8)%3])
+        if rnd()<0.3:np[i]=setb(FIRE_COLORS[random.getrandbits(8)%len(FIRE_COLORS)])
     np.write();time.sleep_ms(50)
 def starry():
     global frame_count;frame_count+=1;np.fill((0,0,0))
-    c=[(255,255,255),(200,200,255),(255,255,200)]
     for i in range(LED_COUNT):
-        if rnd()<0.1:np[i]=setb(c[random.getrandbits(8)%3])
+        if rnd()<0.1:np[i]=setb(STARRY_COLORS[random.getrandbits(8)%len(STARRY_COLORS)])
     np.write();time.sleep_ms(200)
 def wave():
     global frame_count;o=(frame_count*3)%360;frame_count+=1
     for i in range(LED_COUNT):
-        s=__import__('math').sin(__import__('math').radians((o+i*12)%360))
-        if s>0:np[i]=setb((int(255*(1-s)),int(255*s),0))
-        else:np[i]=setb((0,int(255*(1+s)),int(255*(-s))))
+        a=(o+i*12)%360;s=wave_level(a)
+        if a==180 and s==0:np[i]=setb((254,0,0))
+        elif s>0:np[i]=setb((255-s,s,0))
+        else:np[i]=setb((0,255+s,-s))
     np.write();time.sleep_ms(30)
 def chase():
     global anim_state
     if 'p' not in anim_state:anim_state={'p':0}
-    p=anim_state['p'];c=[(255,0,0),(0,255,0),(0,0,255)];np.fill((0,0,0))
-    for ci,x in enumerate(c):
+    p=anim_state['p'];np.fill((0,0,0))
+    for ci,x in enumerate(CHASE_COLORS):
         for i in range(5):
             pos=(p-ci*5-i)%LED_COUNT
-            np[pos]=setb([int(y*(5-i)/5)for y in x])
+            scale=5-i
+            np[pos]=setb((x[0]*scale//5,x[1]*scale//5,x[2]*scale//5))
     np.write();anim_state['p']=(p+1)%40;time.sleep_ms(80)
 def sparkle():
     global frame_count;frame_count+=1;np.fill((0,0,0))
-    c=[(255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),(0,255,255),(255,255,255)]
     for _ in range(int(LED_COUNT*0.2)):
-        np[random.getrandbits(8)%LED_COUNT]=setb(c[random.getrandbits(8)%7])
+        np[random.getrandbits(8)%LED_COUNT]=setb(SPARKLE_COLORS[random.getrandbits(8)%len(SPARKLE_COLORS)])
     np.write();time.sleep_ms(80)
 def snake():
     global anim_state
