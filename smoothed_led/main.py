@@ -258,16 +258,20 @@ ANIM_FUNCS={'rainbow':rainbow,'breath':breath,'fire':fire,'starry':starry,'wave'
 # ==================== 主程序 ====================
 def main():
     global np
-    np=neopixel.NeoPixel(Pin(LED_PIN,Pin.OUT),LED_COUNT)
-    np.fill((0,0,0));np.write();init_anim()
+    np = neopixel.NeoPixel(Pin(LED_PIN, Pin.OUT), LED_COUNT)
+    np.fill((0, 0, 0))
+    np.write()
+    init_anim()
 
-    print("="*40)
+    print("=" * 40)
     print("ESP8266 LED")
-    print("="*40)
+    print("=" * 40)
 
     if try_wifi():
         control_mode()
     else:
         config_mode()
 
-main()
+
+if __name__ == "__main__":
+    main()
