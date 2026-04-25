@@ -1,322 +1,322 @@
-# `main.py` Runtime Optimization Design
+# `main.py` 运行时优化设计
 
-Date: 2026-04-26
-Project: `smoothed_led`
-Target: `main.py` on ESP8266 NodeMCU running MicroPython
+日期：2026-04-26  
+项目：`smoothed_led`  
+目标：运行在 ESP8266 NodeMCU + MicroPython 上的 `main.py`
 
-## Goal
+## 目标
 
-Optimize the existing `main.py` runtime for lower memory pressure and lower CPU overhead on ESP8266 without adding features.
+在不新增功能的前提下，优化现有 `main.py` 的运行时行为，降低 ESP8266 上的内存压力和 CPU 开销。
 
-## Confirmed Constraints
+## 已确认约束
 
-- Keep `main.py` as the primary single-file runtime.
-- Do not add new user-facing features.
-- Keep UDP control/config behavior unchanged from the caller's perspective.
-- Keep the same ports, commands, and effect names.
-- Animation visuals may change slightly if needed for better memory or runtime behavior.
-- Prefer changes that improve long-running stability on limited ESP8266 memory.
+- 保持 `main.py` 作为主要的单文件运行时。
+- 不新增任何面向用户的功能。
+- 从调用方视角看，UDP 控制/配置行为保持不变。
+- 端口、命令字、灯效名称保持不变。
+- 为了换取更好的内存或运行时表现，动画视觉允许有轻微变化。
+- 优先选择能提升 ESP8266 小内存环境下长时间运行稳定性的改动。
 
-## Non-Goals
+## 非目标
 
-- No protocol redesign.
-- No multi-file runtime refactor.
-- No new persistence format.
-- No async, threading, or task scheduler changes.
-- No mobile app changes.
+- 不重设计协议。
+- 不做多文件运行时重构。
+- 不修改持久化格式。
+- 不引入 async、线程或任务调度器改造。
+- 不修改移动端应用。
 
-## Recommended Approach
+## 推荐方案
 
-Use a targeted single-file runtime refactor inside `main.py`.
+在 `main.py` 内部做一次定向的单文件运行时重构。
 
-This approach keeps the existing boot flow and external behavior, but rewrites hot paths so they allocate fewer temporary objects, perform fewer repeated lookups, and rely less on per-frame floating point and dynamic imports.
+这个方案保留现有启动流程和对外行为，但会重写热点路径，让代码在运行时分配更少的临时对象、执行更少的重复查找，并减少对逐帧浮点计算和动态导入的依赖。
 
-## Alternatives Considered
+## 备选方案
 
-### 1. Conservative cleanup only
+### 1. 仅做保守清理
 
-Examples:
+示例：
 
-- Move dynamic imports to module scope.
-- Reuse static strings.
-- Reduce repeated `split()` calls.
+- 把动态导入移到模块级。
+- 复用静态字符串。
+- 减少重复的 `split()` 调用。
 
-Pros:
+优点：
 
-- Lowest risk.
+- 风险最低。
 
-Cons:
+缺点：
 
-- Leaves the main performance and fragmentation hotspots in place.
-- Likely not enough improvement for long-running ESP8266 use.
+- 主要性能和内存碎片热点仍然保留。
+- 对 ESP8266 的长期运行改善可能不够明显。
 
-### 2. Targeted single-file optimization
+### 2. 定向单文件优化
 
-Examples:
+示例：
 
-- Rewrite hot animation loops to reduce temporary allocations.
-- Replace per-frame rebuilt constants with module-level constants.
-- Narrow exception scopes around network I/O.
-- Simplify command parsing to reduce transient string/list objects.
+- 重写热点动画循环，减少临时对象分配。
+- 把逐帧重建的常量提升为模块级常量。
+- 缩小网络 I/O 周围的异常处理范围。
+- 简化命令解析，减少瞬时字符串和列表对象。
 
-Pros:
+优点：
 
-- Best balance of runtime gain, maintainability, and low deployment impact.
+- 在运行时收益、可维护性和低部署成本之间最平衡。
 
-Cons:
+缺点：
 
-- Slightly more internal restructuring than a minimal cleanup.
-- Some animations may have minor visual differences.
+- 相比最小化清理，会有更多内部结构调整。
+- 某些动画可能会有轻微视觉差异。
 
-### 3. Aggressive runtime redesign
+### 3. 激进的运行时重设计
 
-Examples:
+示例：
 
-- Rebuild animation and socket handling around a lower-level state machine.
+- 用更底层的状态机重建动画和 socket 处理流程。
 
-Pros:
+优点：
 
-- Highest theoretical performance ceiling.
+- 理论性能上限最高。
 
-Cons:
+缺点：
 
-- Harder to reason about.
-- Higher regression risk.
-- Too invasive for an optimization-only change.
+- 更难理解和维护。
+- 回归风险更高。
+- 对这次“仅优化、不扩功能”的目标来说过于激进。
 
-## High-Level Design
+## 高层设计
 
-### Runtime boundaries
+### 运行时边界
 
-Keep the existing top-level runtime split:
+保留现有顶层运行时拆分：
 
-- `main()` initializes hardware and chooses mode.
-- `try_wifi()` decides whether the device enters control mode or config mode.
-- `control_mode()` handles UDP control commands and animation refresh.
-- `config_mode()` handles AP setup, UDP config commands, and WiFi list broadcast.
+- `main()` 负责初始化硬件并选择运行模式。
+- `try_wifi()` 决定设备进入控制模式还是配置模式。
+- `control_mode()` 负责 UDP 控制命令和动画刷新。
+- `config_mode()` 负责 AP 设置、UDP 配置命令和 WiFi 列表广播。
 
-### Optimization focus areas
+### 优化重点区域
 
-1. Animation loop hot paths
-2. Command parsing and response generation
-3. WiFi/config loop memory behavior
-4. Garbage collection timing
+1. 动画循环热点路径
+2. 命令解析和响应生成
+3. WiFi/配置循环的内存行为
+4. 垃圾回收时机
 
-## Animation Design
+## 动画设计
 
-### State model
+### 状态模型
 
-Keep the existing top-level state variables:
+保留现有顶层状态变量：
 
 - `mode`
 - `brightness`
 - `frame_count`
 - `anim_state`
 
-Internal changes:
+内部调整：
 
-- Keep `anim_state` as the single animation-specific container.
-- Normalize it to a small, predictable set of keys per effect instead of ad hoc dictionary shapes that grow and change over time.
-- Reset only the minimum required state during mode switches.
+- 继续使用 `anim_state` 作为动画专用状态容器。
+- 将其收敛为每种灯效只使用少量、可预测的键，而不是长期运行中不断变化的临时字典结构。
+- 切换模式时，只重置最小必要状态。
 
-### Hot-path optimization rules
+### 热点路径优化规则
 
-Each animation function should:
+每个动画函数都应：
 
-- Write LED values directly to `np`
-- Update only the state it owns
-- Avoid constructing lists or tuples inside tight loops unless unavoidable
-- Avoid repeated global lookups where a local alias is enough
-- Avoid dynamic imports
+- 直接把 LED 值写入 `np`
+- 只更新自己需要的状态
+- 除非确实不可避免，否则避免在紧密循环中构造列表或元组
+- 能通过局部别名减少重复全局查找时，优先使用局部别名
+- 避免动态导入
 
-### Planned animation-specific changes
+### 计划中的动画级优化
 
 #### `rainbow()`
 
-- Keep the same overall effect.
-- Reduce repeated global lookups and repeated arithmetic where practical.
+- 保持整体视觉风格不变。
+- 在可行处减少重复的全局查找和重复算术。
 
 #### `breath()`
 
-- Preserve the current state-machine style.
-- Keep only the minimum state fields needed for step, direction, and cycle count.
+- 保留当前状态机风格。
+- 只保留步进、方向、循环计数所需的最小状态字段。
 
-#### `fire()`, `starry()`, `sparkle()`
+#### `fire()`、`starry()`、`sparkle()`
 
-- Move color palettes to module-level constants.
-- Keep random behavior, but avoid rebuilding color lists every frame.
+- 将颜色表提升为模块级常量。
+- 保留随机行为，但避免每帧重建颜色列表。
 
 #### `wave()`
 
-- Remove per-iteration dynamic `__import__('math')`.
-- Prefer a module-level import or a lighter approximation if it materially reduces overhead.
-- Minor visual deviation is acceptable if the effect still reads as a flowing wave.
+- 去掉循环中的 `__import__('math')` 动态导入。
+- 优先使用模块级导入；如果能显著降低开销，也可以用更轻的近似实现替代。
+- 只要整体仍然表现为流动波浪效果，允许有轻微视觉偏差。
 
 #### `chase()`
 
-- Replace list comprehensions used only for transient scaling.
-- Compute scaled RGB values directly with integers.
+- 去掉只为临时缩放而存在的列表推导。
+- 直接用整数计算缩放后的 RGB 值。
 
 #### `snake()`
 
-- Replace the append/pop moving list approach with a lighter fixed-shape state representation if possible.
-- Preserve the visible behavior category: moving snake, target point, direction changes, target reset when eaten.
-- Minor visual differences are acceptable.
+- 如果可行，用更轻的固定形状状态表示替换 append/pop 的移动列表实现。
+- 保留这类灯效的可见行为特征：移动的蛇、目标点、方向变化、吃到目标后刷新目标。
+- 允许轻微视觉差异。
 
-## Command Parsing Design
+## 命令解析设计
 
-### Requirements
+### 需求
 
-- Keep all current command words and reply formats.
-- Keep support for:
+- 保持当前所有命令字和回复格式。
+- 继续支持：
   - `mode:<effect>`
   - `mode:next`
   - `mode:prev`
   - `bright:<0-255>`
   - `status`
   - `help`
-- Keep config mode support for:
+- 配置模式继续支持：
   - `config:SSID:PASSWORD`
   - `status`
   - `list`
 
-### Internal parsing strategy
+### 内部解析策略
 
-- Use prefix checks instead of broad repeated splitting.
-- Split at most once or twice when needed.
-- Keep static response strings and joined effect/help text as module-level constants.
-- Avoid rebuilding help text and effect lists inside long-running loops.
+- 通过前缀判断代替宽泛的重复 `split()`。
+- 必要时最多切分一次或两次。
+- 将静态响应字符串、拼接后的灯效列表和帮助文本提升为模块级常量。
+- 避免在长时间运行循环里反复构建帮助文本和灯效列表字符串。
 
-## WiFi and Network Loop Design
+## WiFi 与网络循环设计
 
-### Control mode
+### 控制模式
 
-Keep the current behavior:
+保留当前行为：
 
-- UDP socket on control port
-- Receive command
-- Process command
-- Advance one animation frame
+- 在控制端口上监听 UDP socket
+- 接收命令
+- 处理命令
+- 推进一帧动画
 
-Internal changes:
+内部调整：
 
-- Narrow `try/except` blocks to actual socket and decode boundaries.
-- Avoid using exceptions as a normal control path where a branch is sufficient.
-- Keep animation dispatch behavior stable even when packets are absent.
+- 将 `try/except` 缩小到真正的 socket 和解码边界。
+- 能通过分支判断解决的情况，不再依赖异常作为常规控制流。
+- 即使没有收到数据包，也保持动画调度行为稳定。
 
-### Config mode
+### 配置模式
 
-Keep the current behavior:
+保留当前行为：
 
-- Disable STA mode
-- Enable AP mode with the same SSID
-- Listen on config UDP port
-- Broadcast scanned SSIDs periodically
+- 关闭 STA 模式
+- 以相同 SSID 开启 AP 模式
+- 监听配置 UDP 端口
+- 周期性广播扫描到的 SSID 列表
 
-Internal changes:
+内部调整：
 
-- Reuse scan and broadcast data where possible.
-- Avoid unnecessary message reconstruction.
-- Keep scan retry behavior tolerant of transient failures.
+- 在可能的情况下复用扫描结果和广播数据。
+- 避免不必要的消息重建。
+- 保持扫描重试逻辑对短暂失败的容忍度。
 
-## Memory Management Design
+## 内存管理设计
 
-### Main principles
+### 基本原则
 
-- Prefer module-level constants over per-frame temporary objects.
-- Prefer integer math where it materially lowers cost.
-- Avoid loop-local imports.
-- Reduce repeated string formatting inside long-running loops.
-- Keep garbage collection explicit but less noisy.
+- 复用频繁使用的数据，优先提升为模块级常量。
+- 在能显著降低开销的地方优先使用整数运算。
+- 避免循环内导入。
+- 减少长时间运行循环中的重复字符串格式化。
+- 保持显式垃圾回收，但降低无意义的频繁触发。
 
-### Garbage collection strategy
+### 垃圾回收策略
 
-Instead of collecting opportunistically in many unrelated places:
+不再在许多无关路径里顺手执行回收，而是收敛到更明确的时机：
 
-- Collect after command handling where it helps bound short-lived allocations.
-- Collect after periodic config-mode work such as scanning/broadcast refresh if needed.
-- Avoid placing `gc.collect()` in every inner path unless profiling shows it is necessary.
+- 在命令处理后回收，以限制短生命周期对象堆积。
+- 在配置模式的周期性任务之后回收，例如扫描或广播刷新之后。
+- 除非实际验证证明有必要，否则不在每个内层路径都调用 `gc.collect()`。
 
-## Error Handling Design
+## 错误处理设计
 
-- Keep I/O boundaries defensive: socket receive, decode, file read/write, WiFi scan/connect.
-- Reduce bare `except:` usage where a narrower failure boundary is enough.
-- Do not let malformed packets crash the runtime.
-- Do not silently hide non-I/O logic errors inside the animation or command code unless the current behavior depends on it.
+- 在 I/O 边界继续保持防御性处理：socket 接收、解码、文件读写、WiFi 扫描/连接。
+- 在足够的地方减少裸 `except:`，改为更窄的失败边界。
+- 不让格式错误的数据包直接导致运行时崩溃。
+- 除非当前行为依赖于此，否则不再无条件吞掉动画或命令逻辑中的非 I/O 错误。
 
-## Compatibility Expectations
+## 兼容性预期
 
-The following must remain compatible:
+以下内容必须保持兼容：
 
-- Ports `8888` and `8889`
+- 端口 `8888` 和 `8889`
 - AP SSID `LED_Config`
-- Existing command words
-- Existing effect names
-- Existing basic reply formats
-- Existing boot decision flow: saved WiFi -> try control mode, otherwise config mode
+- 现有命令字
+- 现有灯效名称
+- 现有基础回复格式
+- 现有启动决策流程：有已保存 WiFi 则尝试进入控制模式，否则进入配置模式
 
-The following may vary slightly:
+以下内容允许有轻微变化：
 
-- Exact animation timing feel within a small range
-- Exact per-pixel wave/snake visual details
-- Internal implementation structure
+- 动画节奏的细微体感差异
+- `wave` / `snake` 的逐像素视觉细节
+- 内部实现结构
 
-## Verification Plan
+## 验证计划
 
-### Functional checks
+### 功能检查
 
-1. Boot with valid `w.cfg` and verify the device enters control mode.
-2. Boot without valid WiFi config and verify the device enters config mode.
-3. Verify control commands still work:
+1. 在存在有效 `w.cfg` 时启动，确认设备进入控制模式。
+2. 在没有有效 WiFi 配置时启动，确认设备进入配置模式。
+3. 验证控制命令仍然可用：
    - `mode:<effect>`
    - `mode:next`
    - `mode:prev`
    - `bright:<value>`
    - `status`
    - `help`
-4. Verify config commands still work:
+4. 验证配置命令仍然可用：
    - `config:SSID:PASSWORD`
    - `status`
    - `list`
-5. Verify all eight effects still run and remain switchable.
+5. 验证 8 种灯效都还能运行，并且仍可切换。
 
-### Runtime quality checks
+### 运行质量检查
 
-1. Confirm no immediate crashes or resets in either mode.
-2. Confirm repeated mode switching does not obviously degrade responsiveness.
-3. Confirm the optimized version does not introduce visibly worse frame stutter than the current baseline.
+1. 确认两种模式下都不会立即崩溃或重启。
+2. 确认频繁切换模式时，响应性不会明显恶化。
+3. 确认优化后的版本不会比当前基线出现更明显的卡顿。
 
-## Risks and Mitigations
+## 风险与缓解
 
-### Risk: optimization changes visual identity too much
+### 风险：优化后动画风格偏移过大
 
-Mitigation:
+缓解：
 
-- Only allow minor visual differences.
-- Keep each effect's recognizable style intact.
+- 只接受轻微视觉变化。
+- 保留每种灯效可识别的核心风格。
 
-### Risk: tightening exception handling exposes hidden bugs
+### 风险：收紧异常处理后暴露隐藏问题
 
-Mitigation:
+缓解：
 
-- Keep defensive boundaries around network and file I/O.
-- Verify command handling and mode switching explicitly after refactor.
+- 继续在网络和文件 I/O 周围保留防御性边界。
+- 在重构后显式验证命令处理和模式切换。
 
-### Risk: memory savings are offset by new constants
+### 风险：新加的常量抵消了节省下来的内存
 
-Mitigation:
+缓解：
 
-- Only hoist data that is reused frequently.
-- Prefer compact constants and shared strings.
+- 只提升高频复用的数据。
+- 优先使用紧凑常量和共享字符串。
 
-## Implementation Scope
+## 实施范围
 
-This design is scoped for a single implementation plan focused on `main.py`.
+该设计的范围适合展开成一个围绕 `main.py` 的单一实现计划。
 
-The implementation should remain incremental:
+实施过程应保持增量推进：
 
-1. Hoist constants and shared strings.
-2. Simplify command parsing.
-3. Optimize animation hot paths.
-4. Tighten network loop behavior and GC timing.
-5. Verify external behavior remains compatible.
+1. 提升常量和共享字符串。
+2. 简化命令解析。
+3. 优化动画热点路径。
+4. 收紧网络循环行为和垃圾回收时机。
+5. 验证外部行为保持兼容。
