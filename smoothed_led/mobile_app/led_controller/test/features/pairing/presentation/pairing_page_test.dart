@@ -30,6 +30,49 @@ class FakePairingCoordinator implements PairingCoordinator {
 }
 
 void main() {
+  testWidgets('配网成功后完成按钮返回语义化结果', (tester) async {
+    final coordinator = FakePairingCoordinator();
+    PairingFlowResult? result;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) {
+            return FilledButton(
+              onPressed: () async {
+                result = await Navigator.of(context).push<PairingFlowResult>(
+                  MaterialPageRoute(
+                    builder: (_) => PairingPage(
+                      controller: PairingController(coordinator: coordinator),
+                    ),
+                  ),
+                );
+              },
+              child: const Text('打开配网页'),
+            );
+          },
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开配网页'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'HomeWiFi');
+    await tester.enterText(find.byType(TextFormField).at(1), '12345678');
+    await tester.tap(find.text('发送配网信息'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+
+    expect(result, PairingFlowResult.paired);
+  });
+
   testWidgets('配网页面按步骤推进直到成功', (tester) async {
     final coordinator = FakePairingCoordinator();
 

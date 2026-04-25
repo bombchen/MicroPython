@@ -9,6 +9,13 @@ import '../../pairing/presentation/pairing_page.dart';
 class DeviceListPage extends ConsumerWidget {
   const DeviceListPage({super.key});
 
+  void _handleSuccessfulPairing(BuildContext context, WidgetRef ref) {
+    ref.invalidate(deviceListProvider);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('设备已添加')),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final devicesAsync = ref.watch(deviceListProvider);
@@ -20,18 +27,16 @@ class DeviceListPage extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () async {
-              final paired = await Navigator.of(context).push<bool>(
+              final result =
+                  await Navigator.of(context).push<PairingFlowResult>(
                 MaterialPageRoute(
                   builder: (_) => const SettingsPage(),
                 ),
               );
-              if (paired != true || !context.mounted) {
+              if (result != PairingFlowResult.paired || !context.mounted) {
                 return;
               }
-              ref.invalidate(deviceListProvider);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('设备已添加')),
-              );
+              _handleSuccessfulPairing(context, ref);
             },
           ),
         ],
@@ -47,18 +52,17 @@ class DeviceListPage extends ConsumerWidget {
                   const SizedBox(height: 12),
                   FilledButton(
                     onPressed: () async {
-                      final paired = await Navigator.of(context).push<bool>(
+                      final result =
+                          await Navigator.of(context).push<PairingFlowResult>(
                         MaterialPageRoute(
                           builder: (_) => const PairingPage(),
                         ),
                       );
-                      if (paired != true || !context.mounted) {
+                      if (result != PairingFlowResult.paired ||
+                          !context.mounted) {
                         return;
                       }
-                      ref.invalidate(deviceListProvider);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('设备已添加')),
-                      );
+                      _handleSuccessfulPairing(context, ref);
                     },
                     child: const Text('添加设备'),
                   ),

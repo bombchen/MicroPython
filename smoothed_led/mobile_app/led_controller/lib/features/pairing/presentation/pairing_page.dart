@@ -7,6 +7,10 @@ import '../application/pairing_controller.dart';
 import '../application/pairing_coordinator.dart';
 import '../domain/pairing_step.dart';
 
+enum PairingFlowResult {
+  paired,
+}
+
 class PairingPage extends ConsumerStatefulWidget {
   const PairingPage({
     super.key,
@@ -178,7 +182,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
           const SizedBox(height: 24),
           FilledButton(
             onPressed: () {
-              Navigator.of(context).pop(true);
+              Navigator.of(context).pop(PairingFlowResult.paired);
             },
             child: const Text('完成'),
           ),

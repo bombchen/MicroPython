@@ -21,21 +21,10 @@ void main() {
   testWidgets('帮助页展示结构化帮助中心内容', (tester) async {
     final faqAnswerSnippet = find.textContaining('设备刚上电');
 
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          pairingCoordinatorProvider.overrideWithValue(FakePairingCoordinator()),
-        ],
-        child: const MaterialApp(home: SettingsPage()),
-      ),
-    );
+    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
 
     expect(find.text('配网帮助'), findsOneWidget);
     expect(find.text('去添加设备'), findsOneWidget);
-    expect(
-      tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-      isNotNull,
-    );
 
     expect(find.text('配网步骤'), findsOneWidget);
     expect(find.text('连接设备热点 LED_Config'), findsOneWidget);

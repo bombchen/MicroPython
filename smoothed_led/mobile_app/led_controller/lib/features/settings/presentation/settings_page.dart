@@ -50,15 +50,17 @@ class SettingsPage extends StatelessWidget {
                     const SizedBox(height: 6),
                     FilledButton(
                       onPressed: () async {
-                        final paired = await Navigator.of(context).push<bool>(
+                        final result =
+                            await Navigator.of(context).push<PairingFlowResult>(
                           MaterialPageRoute(
                             builder: (_) => const PairingPage(),
                           ),
                         );
-                        if (paired != true || !context.mounted) {
+                        if (result != PairingFlowResult.paired ||
+                            !context.mounted) {
                           return;
                         }
-                        Navigator.of(context).pop(true);
+                        Navigator.of(context).pop(PairingFlowResult.paired);
                       },
                       child: const Text('去添加设备'),
                     ),
