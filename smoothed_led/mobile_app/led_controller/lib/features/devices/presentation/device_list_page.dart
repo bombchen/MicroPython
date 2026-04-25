@@ -39,11 +39,18 @@ class DeviceListPage extends ConsumerWidget {
                   const Text('还没有设备'),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
+                    onPressed: () async {
+                      final paired = await Navigator.of(context).push<bool>(
                         MaterialPageRoute(
                           builder: (_) => const PairingPage(),
                         ),
+                      );
+                      if (paired != true || !context.mounted) {
+                        return;
+                      }
+                      ref.invalidate(deviceListProvider);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('设备已添加')),
                       );
                     },
                     child: const Text('添加设备'),

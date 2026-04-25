@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:led_controller/core/network/udp_client.dart';
 import 'package:led_controller/features/devices/application/device_control_controller.dart';
 import 'package:led_controller/features/devices/application/device_list_controller.dart';
+import 'package:led_controller/features/pairing/application/pairing_coordinator.dart';
 import 'package:led_controller/features/devices/domain/device_repository.dart';
 import 'package:led_controller/features/devices/domain/device_status.dart';
 import 'package:led_controller/features/devices/domain/effect_mode.dart';
@@ -22,7 +23,14 @@ class FakeDeviceRepository implements DeviceRepository {
   Future<void> deleteDevice(String id) async {}
 
   @override
-  Future<void> saveDevice(LedDevice device) async {}
+  Future<void> saveDevice(LedDevice device) async {
+    final index = devices.indexWhere((item) => item.id == device.id);
+    if (index == -1) {
+      devices.add(device);
+    } else {
+      devices[index] = device;
+    }
+  }
 
   @override
   Future<void> updateDeviceStatus(String id, DeviceStatus status) async {}
@@ -62,6 +70,39 @@ class FakeUdpClient implements UdpClient {
     Duration timeout = const Duration(seconds: 3),
   }) async {
     return null;
+  }
+}
+
+class FakePairingCoordinator implements PairingCoordinator {
+  FakePairingCoordinator(this.repository);
+
+  final FakeDeviceRepository repository;
+
+  @override
+  Future<void> openWifiSettings() async {}
+
+  @override
+  Future<String> submitCredentials({
+    required String ssid,
+    required String password,
+  }) async {
+    final now = DateTime(2026, 4, 25, 12);
+    await repository.saveDevice(
+      LedDevice(
+        id: 'device-2',
+        name: '新灯带',
+        ipAddress: '192.168.1.45',
+        lastSeenAt: now,
+        lastKnownStatus: const DeviceStatus(
+          mode: EffectMode.rainbow,
+          brightness: 180,
+          connectionState: DeviceConnectionState.online,
+        ),
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    return '192.168.1.45';
   }
 }
 
@@ -169,6 +210,42 @@ void main() {
 
     expect(find.text('网络与权限说明'), findsOneWidget);
     expect(find.textContaining('LED_Config'), findsOneWidget);
+  });
+
+  testWidgets('配网成功返回后刷新设备列表并提示成功', (tester) async {
+    final repository = FakeDeviceRepository(<LedDevice>[]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceRepositoryProvider.overrideWithValue(repository),
+          udpClientProvider.overrideWithValue(FakeUdpClient()),
+          pairingCoordinatorProvider
+              .overrideWithValue(FakePairingCoordinator(repository)),
+        ],
+        child: const MaterialApp(home: DeviceListPage()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('添加设备'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'HomeWiFi');
+    await tester.enterText(find.byType(TextFormField).at(1), '12345678');
+    await tester.tap(find.text('发送配网信息'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新灯带'), findsOneWidget);
+    expect(find.text('192.168.1.45'), findsOneWidget);
+    expect(find.text('设备已添加'), findsOneWidget);
   });
 
   testWidgets('设备列表页展示错误状态', (tester) async {

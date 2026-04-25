@@ -1,11 +1,24 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../core/network/pairing_probe_service.dart';
 import '../../../core/network/udp_client.dart';
 import '../../../core/network/udp_led_protocol.dart';
+import '../../../core/platform/android_wifi_settings_launcher.dart';
 import '../../../core/platform/wifi_settings_launcher.dart';
+import '../../devices/application/device_control_controller.dart';
+import '../../devices/application/device_list_controller.dart';
 import '../../devices/domain/device_repository.dart';
 import '../../devices/domain/device_status.dart';
 import '../../devices/domain/effect_mode.dart';
 import '../../devices/domain/led_device.dart';
+
+final pairingCoordinatorProvider = Provider<PairingCoordinator>((ref) {
+  return DefaultPairingCoordinator(
+    wifiSettingsLauncher: AndroidWifiSettingsLauncher(),
+    udpClient: ref.watch(udpClientProvider),
+    deviceRepository: ref.watch(deviceRepositoryProvider),
+  );
+});
 
 abstract class PairingCoordinator {
   Future<void> openWifiSettings();

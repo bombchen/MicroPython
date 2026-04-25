@@ -1,9 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/platform/android_wifi_settings_launcher.dart';
-import '../../devices/application/device_control_controller.dart';
-import '../../devices/application/device_list_controller.dart';
 import '../application/pairing_controller.dart';
 import '../application/pairing_coordinator.dart';
 import '../domain/pairing_step.dart';
@@ -24,24 +23,21 @@ class _PairingPageState extends ConsumerState<PairingPage> {
   late final PairingController _controller;
   late final TextEditingController _ssidController;
   late final TextEditingController _passwordController;
+  Timer? _waitingTimer;
+  int _waitingSeconds = 0;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controller ??
-        PairingController(
-          coordinator: DefaultPairingCoordinator(
-            wifiSettingsLauncher: AndroidWifiSettingsLauncher(),
-            udpClient: ref.read(udpClientProvider),
-            deviceRepository: ref.read(deviceRepositoryProvider),
-          ),
-        );
+        PairingController(coordinator: ref.read(pairingCoordinatorProvider));
     _ssidController = TextEditingController(text: _controller.state.ssid);
     _passwordController = TextEditingController(text: _controller.state.password);
   }
 
   @override
   void dispose() {
+    _waitingTimer?.cancel();
     _ssidController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -50,6 +46,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
   @override
   Widget build(BuildContext context) {
     final state = _controller.state;
+    _syncWaitingFeedback(state.step);
 
     if (_ssidController.text != state.ssid && state.ssid.isNotEmpty) {
       _ssidController.text = state.ssid;
@@ -145,9 +142,15 @@ class _PairingPageState extends ConsumerState<PairingPage> {
           const SizedBox(height: 24),
           FilledButton(
             onPressed: () async {
+              final ssid = _ssidController.text.trim();
+              final password = _passwordController.text.trim();
+              setState(() {
+                _controller.markWaitingReconnect(ssid, password);
+              });
               await _controller.submitCredentials(
-                ssid: _ssidController.text.trim(),
-                password: _passwordController.text.trim(),
+                ssid: ssid,
+                password: password,
+                markWaiting: false,
               );
               if (!mounted) {
                 return;
@@ -158,10 +161,14 @@ class _PairingPageState extends ConsumerState<PairingPage> {
           ),
         ];
       case PairingStep.waitingReconnect:
-        return const [
-          Center(child: CircularProgressIndicator()),
-          SizedBox(height: 16),
-          Text('正在等待设备重启并重新接入局域网，请稍候。'),
+        return [
+          const Center(child: CircularProgressIndicator()),
+          const SizedBox(height: 16),
+          const Text('正在等待设备重启并重新接入局域网，请稍候。'),
+          const SizedBox(height: 12),
+          Text('目标 WiFi：${_controller.state.ssid}'),
+          const SizedBox(height: 8),
+          Text('已等待 $_waitingSeconds 秒'),
         ];
       case PairingStep.success:
         return [
@@ -252,5 +259,23 @@ class _PairingPageState extends ConsumerState<PairingPage> {
       case PairingStep.failure:
         return '保留已输入内容，方便你原地重试。';
     }
+  }
+
+  void _syncWaitingFeedback(PairingStep step) {
+    if (step == PairingStep.waitingReconnect) {
+      _waitingTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _waitingSeconds += 1;
+        });
+      });
+      return;
+    }
+
+    _waitingTimer?.cancel();
+    _waitingTimer = null;
+    _waitingSeconds = 0;
   }
 }

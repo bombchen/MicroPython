@@ -48,8 +48,11 @@ class PairingController {
   Future<void> submitCredentials({
     required String ssid,
     required String password,
+    bool markWaiting = true,
   }) async {
-    markWaitingReconnect(ssid, password);
+    if (markWaiting) {
+      markWaitingReconnect(ssid, password);
+    }
 
     try {
       final ip = await _coordinator.submitCredentials(

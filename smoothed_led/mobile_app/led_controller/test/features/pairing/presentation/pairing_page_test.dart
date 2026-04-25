@@ -7,6 +7,7 @@ import 'package:led_controller/features/pairing/presentation/pairing_page.dart';
 class FakePairingCoordinator implements PairingCoordinator {
   bool didOpenWifi = false;
   Object? submitError;
+  Duration submitDelay = Duration.zero;
 
   @override
   Future<void> openWifiSettings() async {
@@ -18,6 +19,9 @@ class FakePairingCoordinator implements PairingCoordinator {
     required String ssid,
     required String password,
   }) async {
+    if (submitDelay > Duration.zero) {
+      await Future<void>.delayed(submitDelay);
+    }
     if (submitError != null) {
       throw submitError!;
     }
@@ -92,5 +96,36 @@ void main() {
     expect(find.text('步骤 4/5'), findsOneWidget);
     expect(find.text('HomeWiFi'), findsOneWidget);
     expect(find.text('12345678'), findsOneWidget);
+  });
+
+  testWidgets('提交后立即展示等待重连反馈', (tester) async {
+    final coordinator = FakePairingCoordinator()
+      ..submitDelay = const Duration(seconds: 2);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PairingPage(
+          controller: PairingController(coordinator: coordinator),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'HomeWiFi');
+    await tester.enterText(find.byType(TextFormField).at(1), '12345678');
+    await tester.tap(find.text('发送配网信息'));
+    await tester.pump();
+
+    expect(find.text('正在等待设备重启并重新接入局域网，请稍候。'), findsOneWidget);
+    expect(find.textContaining('HomeWiFi'), findsOneWidget);
+    expect(find.textContaining('已等待'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
   });
 }
