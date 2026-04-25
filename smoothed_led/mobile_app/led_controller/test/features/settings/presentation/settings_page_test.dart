@@ -15,7 +15,7 @@ void main() {
 
     expect(find.text('常见故障'), findsOneWidget);
     expect(find.text('系统与权限说明'), findsOneWidget);
-    expect(find.text('看不到 LED_Config'), findsOneWidget);
+    expect(find.text('看不到 LED_Config'), findsNothing);
 
     expect(find.text('如果手机搜不到热点，请先确认设备刚上电。'), findsNothing);
   });

@@ -79,7 +79,6 @@ class SettingsPage extends StatelessWidget {
               ),
               ExpansionTile(
                 tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-                initiallyExpanded: true,
                 title: const Text('常见故障'),
                 children: _faqItems
                     .map(
