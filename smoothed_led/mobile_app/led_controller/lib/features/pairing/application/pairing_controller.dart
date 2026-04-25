@@ -15,13 +15,24 @@ class PairingController {
     _state = _state.copyWith(step: PairingStep.joinAp);
   }
 
+  void markReturnToApp() {
+    _state = _state.copyWith(step: PairingStep.returnToApp);
+  }
+
   void confirmApJoined() {
     _state = _state.copyWith(step: PairingStep.enterWifi);
   }
 
   Future<void> openWifiSettings() async {
     await _coordinator.openWifiSettings();
-    _state = _state.copyWith(step: PairingStep.returnToApp);
+    markReturnToApp();
+  }
+
+  void returnToWifiForm() {
+    _state = _state.copyWith(
+      step: PairingStep.enterWifi,
+      errorMessage: null,
+    );
   }
 
   void markWaitingReconnect(String ssid, String password) {

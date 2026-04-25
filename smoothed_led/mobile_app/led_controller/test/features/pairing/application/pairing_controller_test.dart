@@ -101,4 +101,26 @@ void main() {
     expect(controller.state.resolvedIpAddress, isNull);
     expect(coordinator.didSubmit, isTrue);
   });
+
+  test('从返回 APP 步骤确认后进入 WiFi 表单页', () {
+    final controller = PairingController();
+
+    controller.moveToApJoin();
+    controller.markReturnToApp();
+    controller.confirmApJoined();
+
+    expect(controller.state.step, PairingStep.enterWifi);
+  });
+
+  test('重试提交前可回到 WiFi 表单并保留已输入内容', () {
+    final controller = PairingController();
+
+    controller.markWaitingReconnect('HomeWiFi', '12345678');
+    controller.returnToWifiForm();
+
+    expect(controller.state.step, PairingStep.enterWifi);
+    expect(controller.state.ssid, 'HomeWiFi');
+    expect(controller.state.password, '12345678');
+    expect(controller.state.errorMessage, isNull);
+  });
 }
