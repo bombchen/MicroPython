@@ -372,7 +372,7 @@ def test_config_mode_unknown_command_returns_command_list(monkeypatch):
     ]
 
 
-def test_config_mode_lowercases_mixed_case_credentials_before_saving(monkeypatch):
+def test_config_mode_preserves_mixed_case_credentials_when_saving(monkeypatch):
     saved = {}
 
     def configure_module(module):
@@ -388,7 +388,7 @@ def test_config_mode_lowercases_mixed_case_credentials_before_saving(monkeypatch
         configure_module=configure_module,
     )
 
-    assert saved["values"] == ("homewifi", "secretpass")
+    assert saved["values"] == ("HomeWiFi", "SecretPass")
     assert fake_sock.sent == [(b"OK!Rebooting...", ("127.0.0.1", 12345))]
 
 

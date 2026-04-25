@@ -97,7 +97,7 @@ def recv_udp_command(sock,bufsize):
     except OSError as exc:
         if is_timeout_error(exc):return None
         raise
-    try:return data.decode().strip().lower(),addr
+    try:return data.decode().strip(),addr
     except UnicodeError:return None
 
 # ==================== WiFi 配置 ====================
@@ -168,7 +168,7 @@ def config_mode():
         packet=recv_udp_command(sock,128)
         if packet is not None:
             cmd,addr=packet
-            print(f"<- {cmd}")
+            print(f"<- {cmd.lower()}")
             cmd_type,payload=parse_config_command(cmd)
 
             if cmd_type=='config':
@@ -186,7 +186,7 @@ def config_mode():
                 if ssids:
                     sock.sendto(f"WIFIS:{','.join(ssids)}".encode(),addr)
                 else:sock.sendto(b"Scanning...",addr)
-            elif cmd.startswith('config:'):
+            elif cmd.lower().startswith('config:'):
                 sock.sendto(b"Error: use config:SSID:PWD",addr)
             else:sock.sendto(CONFIG_COMMANDS_TEXT.encode(),addr)
             gc.collect()
