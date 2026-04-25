@@ -248,6 +248,47 @@ void main() {
     expect(find.text('设备已添加'), findsOneWidget);
   });
 
+  testWidgets('从帮助页进入配网成功后返回列表刷新并提示成功', (tester) async {
+    final repository = FakeDeviceRepository(<LedDevice>[]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceRepositoryProvider.overrideWithValue(repository),
+          udpClientProvider.overrideWithValue(FakeUdpClient()),
+          pairingCoordinatorProvider
+              .overrideWithValue(FakePairingCoordinator(repository)),
+        ],
+        child: const MaterialApp(home: DeviceListPage()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('配网帮助'), findsOneWidget);
+
+    await tester.tap(find.text('去添加设备'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'HomeWiFi');
+    await tester.enterText(find.byType(TextFormField).at(1), '12345678');
+    await tester.tap(find.text('发送配网信息'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新灯带'), findsOneWidget);
+    expect(find.text('192.168.1.45'), findsOneWidget);
+    expect(find.text('设备已添加'), findsOneWidget);
+  });
+
   testWidgets('设备列表页展示错误状态', (tester) async {
     await tester.pumpWidget(
       ProviderScope(

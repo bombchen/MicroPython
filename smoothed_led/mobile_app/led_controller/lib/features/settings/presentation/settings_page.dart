@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../pairing/presentation/pairing_page.dart';
+
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -46,9 +48,19 @@ class SettingsPage extends StatelessWidget {
                       style: textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 6),
-                    const FilledButton(
-                      onPressed: null,
-                      child: Text('去添加设备'),
+                    FilledButton(
+                      onPressed: () async {
+                        final paired = await Navigator.of(context).push<bool>(
+                          MaterialPageRoute(
+                            builder: (_) => const PairingPage(),
+                          ),
+                        );
+                        if (paired != true || !context.mounted) {
+                          return;
+                        }
+                        Navigator.of(context).pop(true);
+                      },
+                      child: const Text('去添加设备'),
                     ),
                   ],
                 ),

@@ -19,11 +19,18 @@ class DeviceListPage extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () {
-              Navigator.of(context).push(
+            onPressed: () async {
+              final paired = await Navigator.of(context).push<bool>(
                 MaterialPageRoute(
                   builder: (_) => const SettingsPage(),
                 ),
+              );
+              if (paired != true || !context.mounted) {
+                return;
+              }
+              ref.invalidate(deviceListProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('设备已添加')),
               );
             },
           ),
