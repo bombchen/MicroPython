@@ -1,0 +1,5 @@
+/.dart_tool/
+/.flutter-plugins
+/.flutter-plugins-dependencies
+/build/
+/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
