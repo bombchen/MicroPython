@@ -104,7 +104,7 @@ class _FakeSocket:
             self.recv_count += 1
             return self.packet
         time.sleep(0.01)
-        raise RuntimeError("no more packets")
+        raise OSError(110, "timed out")
 
     def sendto(self, payload, addr):
         self.sent.append((payload, addr))
@@ -390,3 +390,141 @@ def test_config_mode_lowercases_mixed_case_credentials_before_saving(monkeypatch
 
     assert saved["values"] == ("homewifi", "secretpass")
     assert fake_sock.sent == [(b"OK!Rebooting...", ("127.0.0.1", 12345))]
+
+
+def test_scan_wifis_sorts_by_rssi_descending_and_limits_to_top_five(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    scans = [
+        (b"weak", b"", 1, -90, 0, 0),
+        (b"strong", b"", 1, -20, 0, 0),
+        (b"mid", b"", 1, -50, 0, 0),
+        (b"mid2", b"", 1, -60, 0, 0),
+        (b"mid3", b"", 1, -40, 0, 0),
+        (b"mid4", b"", 1, -30, 0, 0),
+    ]
+
+    class FakeWLAN:
+        def __init__(self, *_args, **_kwargs):
+            self.active_calls = []
+
+        def active(self, value):
+            self.active_calls.append(value)
+
+        def scan(self):
+            return list(scans)
+
+    fake_wlan = FakeWLAN()
+    monkeypatch.setattr(module.network, "WLAN", lambda *_args, **_kwargs: fake_wlan)
+
+    result = module.scan_wifis()
+
+    assert fake_wlan.active_calls == [True]
+    assert [entry[0] for entry in result] == [
+        b"strong",
+        b"mid4",
+        b"mid3",
+        b"mid",
+        b"mid2",
+    ]
+
+
+def test_try_wifi_connects_with_loaded_credentials_and_returns_true(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    events = {"connect": [], "disconnect_calls": 0}
+
+    class FakeWLAN:
+        def active(self, *_args, **_kwargs):
+            return None
+
+        def connect(self, ssid, pwd):
+            events["connect"].append((ssid, pwd))
+
+        def isconnected(self):
+            return True
+
+        def ifconfig(self):
+            return ("192.168.0.8", "", "", "")
+
+        def disconnect(self):
+            events["disconnect_calls"] += 1
+
+    monkeypatch.setattr(module, "load_cfg", lambda: ("HomeWiFi", "secretpass"))
+    monkeypatch.setattr(module.network, "WLAN", lambda *_args, **_kwargs: FakeWLAN())
+
+    assert module.try_wifi() is True
+    assert events["connect"] == [("HomeWiFi", "secretpass")]
+    assert events["disconnect_calls"] == 0
+
+
+def test_try_wifi_disconnects_and_returns_false_after_timeout(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    events = {"connect": [], "disconnect_calls": 0, "sleep_calls": 0}
+
+    class FakeWLAN:
+        def active(self, *_args, **_kwargs):
+            return None
+
+        def connect(self, ssid, pwd):
+            events["connect"].append((ssid, pwd))
+
+        def isconnected(self):
+            return False
+
+        def disconnect(self):
+            events["disconnect_calls"] += 1
+
+    monkeypatch.setattr(module, "load_cfg", lambda: ("HomeWiFi", "secretpass"))
+    monkeypatch.setattr(module.network, "WLAN", lambda *_args, **_kwargs: FakeWLAN())
+    monkeypatch.setattr(
+        module.time,
+        "sleep",
+        lambda *_args, **_kwargs: events.__setitem__(
+            "sleep_calls", events["sleep_calls"] + 1
+        ),
+    )
+
+    assert module.try_wifi() is False
+    assert events["connect"] == [("HomeWiFi", "secretpass")]
+    assert events["disconnect_calls"] == 1
+    assert events["sleep_calls"] == 50
+
+
+def test_save_cfg_and_load_cfg_round_trip(tmp_path, monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+
+    assert module.save_cfg("HomeWiFi", "secretpass") is True
+    assert module.load_cfg() == ("HomeWiFi", "secretpass")
+
+
+def test_is_timeout_error_only_accepts_timeout_style_oserror(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+
+    assert module.is_timeout_error(OSError(110, "timed out")) is True
+    assert module.is_timeout_error(OSError("timed out")) is True
+    assert module.is_timeout_error(OSError(111, "connection refused")) is False
+
+
+def test_recv_udp_command_returns_none_for_timeout(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+
+    class TimeoutSocket:
+        def recvfrom(self, _bufsize):
+            raise OSError(110, "timed out")
+
+    assert module.recv_udp_command(TimeoutSocket(), 64) is None
+
+
+def test_recv_udp_command_propagates_fatal_oserror(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+
+    class FatalSocket:
+        def recvfrom(self, _bufsize):
+            raise OSError(111, "connection refused")
+
+    try:
+        module.recv_udp_command(FatalSocket(), 64)
+    except OSError as exc:
+        assert exc.args[0] == 111
+    else:
+        raise AssertionError("fatal OSError should not be swallowed")

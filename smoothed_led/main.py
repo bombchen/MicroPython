@@ -85,6 +85,20 @@ def parse_config_command(cmd):
     if cmd=='status':return('status',None)
     if cmd=='list':return('list',None)
     return('error',None)
+def is_timeout_error(exc):
+    code=exc.args[0] if exc.args else None
+    if code in (110,'timed out','ETIMEDOUT'):return True
+    if isinstance(code,str):return'timed out'in code.lower()
+    if len(exc.args)>1 and isinstance(exc.args[1],str):return'timed out'in exc.args[1].lower()
+    return False
+def recv_udp_command(sock,bufsize):
+    try:
+        data,addr=sock.recvfrom(bufsize)
+    except OSError as exc:
+        if is_timeout_error(exc):return None
+        raise
+    try:return data.decode().strip().lower(),addr
+    except UnicodeError:return None
 
 # ==================== WiFi 配置 ====================
 def save_cfg(ssid,pwd):
@@ -101,12 +115,12 @@ def load_cfg():
     except:return None,None
 
 def try_wifi():
-    s,p=load_cfg()
-    if not s:return False
-    print(f"WiFi: {s}")
+    ssid,pwd=load_cfg()
+    if not ssid:return False
+    print(f"WiFi: {ssid}")
     wlan=network.WLAN(network.STA_IF)
     wlan.active(True)
-    wlan.connect(s,p)
+    wlan.connect(ssid,pwd)
     for _ in range(50):
         if wlan.isconnected():
             print(f"OK! {wlan.ifconfig()[0]}")
@@ -121,9 +135,11 @@ def scan_wifis():
     wlan.active(True)
     for _ in range(20):
         try:
-            n=wlan.scan()
-            if n:return sorted(n,key=lambda x:x[3],reverse=True)[:5]  # 只返回前5个
-        except:time.sleep(0.1)
+            networks=wlan.scan()
+        except OSError:
+            time.sleep(0.1)
+            continue
+        if networks:return sorted(networks,key=lambda x:x[3],reverse=True)[:5]  # 只返回前5个
     return []
 
 # ==================== 配置模式 (UDP 广播) ====================
@@ -149,11 +165,10 @@ def config_mode():
     ssids=[]
 
     while True:
-        try:
-            data,addr=sock.recvfrom(128)
-            cmd=data.decode().strip().lower()
+        packet=recv_udp_command(sock,128)
+        if packet is not None:
+            cmd,addr=packet
             print(f"<- {cmd}")
-
             cmd_type,payload=parse_config_command(cmd)
 
             if cmd_type=='config':
@@ -161,6 +176,7 @@ def config_mode():
                 print(f"Save: {s}")
                 if save_cfg(s,p):
                     sock.sendto(b"OK!Rebooting...",addr)
+                    gc.collect()
                     time.sleep(1)
                     machine.reset()
                 else:sock.sendto(b"Save Failed",addr)
@@ -174,8 +190,6 @@ def config_mode():
                 sock.sendto(b"Error: use config:SSID:PWD",addr)
             else:sock.sendto(CONFIG_COMMANDS_TEXT.encode(),addr)
             gc.collect()
-        except:
-            pass
 
         # 每5秒广播 WiFi 列表
         if time.time()-last_bcast>5:
@@ -185,6 +199,7 @@ def config_mode():
                 sock.sendto(msg.encode(),('255.255.255.255',CFG_PORT))
                 print(f"-> Broadcast: {len(ssids)} networks")
             last_bcast=time.time()
+            gc.collect()
 
 # ==================== 控制模式 (UDP 控制) ====================
 def control_mode():
@@ -197,11 +212,12 @@ def control_mode():
     print("="*40)
     print(f"Port: {CTRL_PORT}")
     print(f"Effects: {','.join(EFFECTS)}")
+    idle_cycles=0
 
     while True:
-        try:
-            data,addr=sock.recvfrom(64)
-            cmd=data.decode().strip().lower()
+        packet=recv_udp_command(sock,64)
+        if packet is not None:
+            cmd,addr=packet
             print(f"<- {cmd}")
 
             global mode,brightness
@@ -230,10 +246,11 @@ def control_mode():
                 sock.sendto(CONTROL_HELP_TEXT.encode(),addr)
             else:sock.sendto(b"Error",addr)
             gc.collect()
-        except:pass
 
         try:ANIM_FUNCS[mode]()
         except:pass
+        idle_cycles=(idle_cycles+1)&31
+        if idle_cycles==0:gc.collect()
 
 # ==================== 动画函数 ====================
 def rainbow():
