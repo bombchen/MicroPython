@@ -4,9 +4,9 @@ import 'pairing_coordinator.dart';
 
 class PairingController {
   PairingController({PairingCoordinator? coordinator})
-      : _coordinator = coordinator;
+      : _coordinator = coordinator ?? const _MissingPairingCoordinator();
 
-  final PairingCoordinator? _coordinator;
+  final PairingCoordinator _coordinator;
   PairingState _state = const PairingState(step: PairingStep.prepare);
 
   PairingState get state => _state;
@@ -20,7 +20,7 @@ class PairingController {
   }
 
   Future<void> openWifiSettings() async {
-    await _coordinator?.openWifiSettings();
+    await _coordinator.openWifiSettings();
     _state = _state.copyWith(step: PairingStep.returnToApp);
   }
 
@@ -29,6 +29,8 @@ class PairingController {
       step: PairingStep.waitingReconnect,
       ssid: ssid,
       password: password,
+      errorMessage: null,
+      resolvedIpAddress: null,
     );
   }
 
@@ -39,7 +41,7 @@ class PairingController {
     markWaitingReconnect(ssid, password);
 
     try {
-      final ip = await _coordinator!.submitCredentials(
+      final ip = await _coordinator.submitCredentials(
         ssid: ssid,
         password: password,
       );
@@ -52,7 +54,25 @@ class PairingController {
       _state = _state.copyWith(
         step: PairingStep.failure,
         errorMessage: '$error',
+        resolvedIpAddress: null,
       );
     }
+  }
+}
+
+class _MissingPairingCoordinator implements PairingCoordinator {
+  const _MissingPairingCoordinator();
+
+  @override
+  Future<void> openWifiSettings() {
+    throw StateError('PairingCoordinator is required for runtime actions');
+  }
+
+  @override
+  Future<String> submitCredentials({
+    required String ssid,
+    required String password,
+  }) {
+    throw StateError('PairingCoordinator is required for runtime actions');
   }
 }

@@ -7,6 +7,7 @@ import 'package:led_controller/features/pairing/domain/pairing_step.dart';
 class FakePairingCoordinator implements PairingCoordinator {
   bool didOpenWifi = false;
   bool didSubmit = false;
+  Object? submitError;
 
   @override
   Future<void> openWifiSettings() async {
@@ -19,6 +20,9 @@ class FakePairingCoordinator implements PairingCoordinator {
     required String password,
   }) async {
     didSubmit = true;
+    if (submitError != null) {
+      throw submitError!;
+    }
     return '192.168.1.23';
   }
 }
@@ -69,6 +73,32 @@ void main() {
 
     expect(controller.state.step, PairingStep.success);
     expect(controller.state.resolvedIpAddress, '192.168.1.23');
+    expect(coordinator.didSubmit, isTrue);
+  });
+
+  test('打开 WiFi 设置后进入返回 APP 步骤', () async {
+    final coordinator = FakePairingCoordinator();
+    final controller = PairingController(coordinator: coordinator);
+
+    await controller.openWifiSettings();
+
+    expect(coordinator.didOpenWifi, isTrue);
+    expect(controller.state.step, PairingStep.returnToApp);
+  });
+
+  test('提交 WiFi 失败后进入失败状态并清空旧 IP', () async {
+    final coordinator = FakePairingCoordinator()
+      ..submitError = Exception('配网超时');
+    final controller = PairingController(coordinator: coordinator);
+
+    await controller.submitCredentials(
+      ssid: 'HomeWiFi',
+      password: '12345678',
+    );
+
+    expect(controller.state.step, PairingStep.failure);
+    expect(controller.state.errorMessage, contains('配网超时'));
+    expect(controller.state.resolvedIpAddress, isNull);
     expect(coordinator.didSubmit, isTrue);
   });
 }

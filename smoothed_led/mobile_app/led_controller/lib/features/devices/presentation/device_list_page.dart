@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../settings/presentation/settings_page.dart';
 import '../application/device_list_controller.dart';
+import 'device_control_page.dart';
 import '../../pairing/presentation/pairing_page.dart';
 
 class DeviceListPage extends ConsumerWidget {
@@ -12,7 +14,21 @@ class DeviceListPage extends ConsumerWidget {
     final devicesAsync = ref.watch(deviceListProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('我的设备')),
+      appBar: AppBar(
+        title: const Text('我的设备'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const SettingsPage(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: devicesAsync.when(
         data: (devices) {
           if (devices.isEmpty) {
@@ -45,6 +61,16 @@ class DeviceListPage extends ConsumerWidget {
               return ListTile(
                 title: Text(device.name),
                 subtitle: Text(device.ipAddress),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => DeviceControlPage(
+                        device: device,
+                      ),
+                    ),
+                  );
+                  ref.invalidate(deviceListProvider);
+                },
               );
             },
           );

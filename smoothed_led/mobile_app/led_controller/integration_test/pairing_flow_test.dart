@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:integration_test/integration_test.dart';
 import 'package:led_controller/app/app.dart';
 import 'package:led_controller/features/devices/application/device_list_controller.dart';
 import 'package:led_controller/features/devices/domain/device_repository.dart';
@@ -21,7 +23,9 @@ class EmptyDeviceRepository implements DeviceRepository {
 }
 
 void main() {
-  testWidgets('启动后默认显示设备列表空状态', (tester) async {
+  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets('首页可以进入设置与帮助页', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -32,8 +36,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('我的设备'), findsOneWidget);
-    expect(find.text('还没有设备'), findsOneWidget);
-    expect(find.text('添加设备'), findsOneWidget);
+    expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+
+    expect(find.text('网络与权限说明'), findsOneWidget);
+    expect(find.textContaining('LED_Config'), findsOneWidget);
   });
 }
