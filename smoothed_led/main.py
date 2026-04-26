@@ -1,22 +1,29 @@
-import neopixel,time,random,network,socket,gc,machine
+import neopixel,time,network,socket,gc,machine
 from machine import Pin
+import led_effects as fx
+import led_proto as proto
 
 LED_PIN=2;LED_COUNT=30;CTRL_PORT=8888;CFG_PORT=8889;AP_SSID="LED_Config"
 mode="rainbow";brightness=180;np=None;frame_count=0;anim_state={}
-FIRE_COLORS=((255,0,0),(255,80,0),(255,160,0))
-STARRY_COLORS=((255,255,255),(200,200,255),(255,255,200))
-CHASE_COLORS=((255,0,0),(0,255,0),(0,0,255))
-SPARKLE_COLORS=((255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),(0,255,255),(255,255,255))
-WAVE_LEVELS=b'\x00\x04\x09\r\x12\x16\x1b\x1f#(,159>BFKOSW[`dhlptx|\x7f\x83\x87\x8b\x8f\x92\x96\x99\x9d\xa0\xa4\xa7\xab\xae\xb1\xb4\xb7\xba\xbe\xc0\xc3\xc6\xc9\xcc\xce\xd1\xd3\xd6\xd8\xdb\xdd\xdf\xe1\xe3\xe5\xe7\xe9\xeb\xec\xee\xf0\xf1\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfd\xfe\xfe\xfe\xff\xff\xff\xff'
+FIRE_COLORS=fx.FIRE_COLORS
+STARRY_COLORS=fx.STARRY_COLORS
+CHASE_COLORS=fx.CHASE_COLORS
+SPARKLE_COLORS=fx.SPARKLE_COLORS
+WAVE_LEVELS=fx.WAVE_LEVELS
 EFFECTS=("rainbow","breath","fire","starry","wave","chase","sparkle","snake")
 EFFECTS_TEXT="|".join(EFFECTS)
 CONTROL_HELP_TEXT="mode:(%s|next|prev),bright:0-255,status"%EFFECTS_TEXT
 CONFIG_COMMANDS_TEXT="Commands:config:SSID:PWD, status, list"
+clamp_u8=proto.clamp_u8
+wave_level=fx.wave_level
+parse_control_command=proto.parse_control_command
+parse_config_command=proto.parse_config_command
+is_timeout_error=proto.is_timeout_error
+recv_udp_command=proto.recv_udp_command
 
 def setb(c):
     b=brightness
     return(c[0]*b//255,c[1]*b//255,c[2]*b//255)
-def rnd():return random.getrandbits(16)/65535.0
 def wheel(p):
     p=255-p
     if p<85:return(255-p*3,0,p*3)
@@ -28,45 +35,6 @@ def init_anim():
 def get_mode_idx(m):
     try:return EFFECTS.index(m)
     except:return 0
-def clamp_u8(v):
-    try:v=int(v)
-    except:raise
-    return 0 if v<0 else 255 if v>255 else v
-def wave_level(a):
-    a%=360
-    if a<=90:return WAVE_LEVELS[a]
-    if a<=180:return WAVE_LEVELS[180-a]
-    if a<=270:return-WAVE_LEVELS[a-180]
-    return-WAVE_LEVELS[360-a]
-def parse_control_command(cmd):
-    cmd=cmd.strip().lower()
-    if cmd.startswith("mode:"):return("mode",cmd[5:])
-    if cmd.startswith("bright:"):
-        try:return("brightness",clamp_u8(cmd[7:]))
-        except:return("brightness_error",None)
-    if cmd=="status":return("status",None)
-    if cmd=="help":return("help",None)
-    return("error",None)
-def parse_config_command(cmd):
-    raw=cmd.strip();low=raw.lower()
-    if low.startswith("config:"):
-        p=raw.split(":",2)
-        return("config",(p[1],p[2])) if len(p)==3 else("error",None)
-    if low=="status":return("status",None)
-    if low=="list":return("list",None)
-    return("error",None)
-def is_timeout_error(exc):
-    a=exc.args
-    if not a:return False
-    c=a[0]
-    return c in(110,"timed out","ETIMEDOUT")or(isinstance(c,str)and"timed out"in c.lower())or(len(a)>1 and isinstance(a[1],str)and"timed out"in a[1].lower())
-def recv_udp_command(sock,n):
-    try:data,addr=sock.recvfrom(n)
-    except OSError as exc:
-        if is_timeout_error(exc):return None
-        raise
-    try:return data.decode().strip(),addr
-    except UnicodeError:return None
 
 def save_cfg(ssid,pwd):
     try:
@@ -154,65 +122,28 @@ def control_mode():
 
 def rainbow():
     global frame_count
-    j=frame_count%256
-    for i in range(LED_COUNT):np[i]=setb(wheel((i*256//LED_COUNT+j)&255))
-    np.write();frame_count+=1;time.sleep_ms(20)
+    frame_count=fx.rainbow(np,LED_COUNT,setb,wheel,frame_count)
 def breath():
     global anim_state
-    if"s"not in anim_state:anim_state={"s":0,"d":1,"c":0}
-    a=anim_state;np.fill(setb((255,0,0)));np.write();a["s"]+=a["d"]
-    if a["s"]>=50:a["d"]=-1
-    elif a["s"]<=0:
-        a["d"]=1;a["c"]+=1
-        if a["c"]>=3:anim_state={}
-    time.sleep_ms(20)
+    anim_state=fx.breath(np,setb,anim_state)
 def fire():
     global frame_count
-    frame_count+=1;np.fill((0,0,0))
-    for i in range(LED_COUNT):
-        if rnd()<0.3:np[i]=setb(FIRE_COLORS[random.getrandbits(8)%3])
-    np.write();time.sleep_ms(50)
+    frame_count=fx.fire(np,LED_COUNT,setb,frame_count)
 def starry():
     global frame_count
-    frame_count+=1;np.fill((0,0,0))
-    for i in range(LED_COUNT):
-        if rnd()<0.1:np[i]=setb(STARRY_COLORS[random.getrandbits(8)%3])
-    np.write();time.sleep_ms(200)
+    frame_count=fx.starry(np,LED_COUNT,setb,frame_count)
 def wave():
     global frame_count
-    o=(frame_count*3)%360;frame_count+=1
-    for i in range(LED_COUNT):
-        a=(o+i*12)%360;s=wave_level(a)
-        if a==180 and s==0:np[i]=setb((254,0,0))
-        elif s>0:np[i]=setb((255-s,s,0))
-        else:np[i]=setb((0,255+s,-s))
-    np.write();time.sleep_ms(30)
+    frame_count=fx.wave(np,LED_COUNT,setb,frame_count,wave_level)
 def chase():
     global anim_state
-    if"p"not in anim_state:anim_state={"p":0}
-    p=anim_state["p"];np.fill((0,0,0))
-    for ci,x in enumerate(CHASE_COLORS):
-        for i in range(5):
-            s=5-i;pos=(p-ci*5-i)%LED_COUNT
-            np[pos]=setb((x[0]*s//5,x[1]*s//5,x[2]*s//5))
-    np.write();anim_state["p"]=(p+1)%40;time.sleep_ms(80)
+    anim_state=fx.chase(np,LED_COUNT,setb,anim_state)
 def sparkle():
     global frame_count
-    frame_count+=1;np.fill((0,0,0))
-    for _ in range(LED_COUNT//5):np[random.getrandbits(8)%LED_COUNT]=setb(SPARKLE_COLORS[random.getrandbits(8)%7])
-    np.write();time.sleep_ms(80)
+    frame_count=fx.sparkle(np,LED_COUNT,setb,frame_count)
 def snake():
     global anim_state
-    if"pos"not in anim_state:anim_state={"pos":list(range(8)),"d":1,"fp":20,"w":0}
-    s=anim_state;s["w"]+=1
-    if s["w"]<10:time.sleep_ms(10);return
-    s["w"]=0;np.fill((0,0,0));s["pos"].append((s["pos"][-1]+s["d"])%LED_COUNT)
-    if len(s["pos"])>8:s["pos"].pop(0)
-    if rnd()<0.05:s["d"]*=-1
-    for i,p in enumerate(s["pos"]):np[p]=setb((0,int(255*(i+1)/8),0))
-    np[s["fp"]]=setb((255,0,0))
-    if s["pos"][-1]==s["fp"]:s["fp"]=random.getrandbits(8)%LED_COUNT
-    np.write();time.sleep_ms(10)
+    anim_state=fx.snake(np,LED_COUNT,setb,anim_state)
 
 ANIM_FUNCS={"rainbow":rainbow,"breath":breath,"fire":fire,"starry":starry,"wave":wave,"chase":chase,"sparkle":sparkle,"snake":snake}
 
