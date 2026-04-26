@@ -3,7 +3,6 @@ import neopixel
 from machine import Pin
 import time
 import random
-import math
 import network
 import socket
 import gc
@@ -36,7 +35,9 @@ SPARKLE_COLORS = (
     (0, 255, 255),
     (255, 255, 255),
 )
-WAVE_LEVELS = tuple(int(round(math.sin(math.radians(angle))*255)) for angle in range(91))
+# Quarter-wave sine levels for 0..90 degrees stored compactly to avoid
+# allocating a large tuple of Python ints at import time on ESP8266.
+WAVE_LEVELS = b'\x00\x04\x09\r\x12\x16\x1b\x1f#(,159>BFKOSW[`dhlptx|\x7f\x83\x87\x8b\x8f\x92\x96\x99\x9d\xa0\xa4\xa7\xab\xae\xb1\xb4\xb7\xba\xbe\xc0\xc3\xc6\xc9\xcc\xce\xd1\xd3\xd6\xd8\xdb\xdd\xdf\xe1\xe3\xe5\xe7\xe9\xeb\xec\xee\xf0\xf1\xf3\xf4\xf5\xf6\xf7\xf8\xf9\xfa\xfb\xfc\xfd\xfd\xfe\xfe\xfe\xff\xff\xff\xff'
 
 # 效果列表
 EFFECTS = ('rainbow','breath','fire','starry','wave','chase','sparkle','snake')
