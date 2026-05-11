@@ -18,6 +18,8 @@ def parse_config_command(cmd):
         return("config",(p[1],p[2])) if len(p)==3 else("error",None)
     if low=="status":return("status",None)
     if low=="list":return("list",None)
+    if low=="diag":return("diag",None)
+    if low=="reset":return("reset",None)
     return("error",None)
 def is_timeout_error(exc):
     a=exc.args

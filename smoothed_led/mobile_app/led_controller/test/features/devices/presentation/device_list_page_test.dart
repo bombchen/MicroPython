@@ -82,6 +82,9 @@ class FakePairingCoordinator implements PairingCoordinator {
   Future<void> openWifiSettings() async {}
 
   @override
+  Future<void> resetConfiguration() async {}
+
+  @override
   Future<String> submitCredentials({
     required String ssid,
     required String password,

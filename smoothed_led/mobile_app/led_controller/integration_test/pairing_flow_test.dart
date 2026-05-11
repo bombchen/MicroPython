@@ -40,7 +40,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.settings_outlined));
     await tester.pumpAndSettle();
 
-    expect(find.text('网络与权限说明'), findsOneWidget);
+    expect(find.text('系统与权限说明'), findsOneWidget);
     expect(find.textContaining('LED_Config'), findsOneWidget);
   });
 }

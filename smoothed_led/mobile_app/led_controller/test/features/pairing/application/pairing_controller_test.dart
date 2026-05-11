@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:led_controller/features/pairing/application/pairing_controller.dart';
 import 'package:led_controller/features/pairing/application/pairing_coordinator.dart';
+import 'package:led_controller/features/pairing/application/pairing_failure.dart';
 import 'package:led_controller/features/pairing/domain/pairing_state.dart';
 import 'package:led_controller/features/pairing/domain/pairing_step.dart';
 
@@ -13,6 +14,9 @@ class FakePairingCoordinator implements PairingCoordinator {
   Future<void> openWifiSettings() async {
     didOpenWifi = true;
   }
+
+  @override
+  Future<void> resetConfiguration() async {}
 
   @override
   Future<String> submitCredentials({
@@ -51,11 +55,13 @@ void main() {
     const original = PairingState(
       step: PairingStep.failure,
       errorMessage: 'network error',
+      diagnosticsMessage: 'diag',
       resolvedIpAddress: '192.168.4.1',
     );
 
     final preserved = original.copyWith();
     expect(preserved.errorMessage, 'network error');
+    expect(preserved.diagnosticsMessage, 'diag');
     expect(preserved.resolvedIpAddress, '192.168.4.1');
 
     final cleared = original.copyWith(resolvedIpAddress: null);
@@ -102,6 +108,24 @@ void main() {
     expect(coordinator.didSubmit, isTrue);
   });
 
+  test('提交 WiFi 失败且包含诊断后保留独立诊断信息', () async {
+    final coordinator = FakePairingCoordinator()
+      ..submitError = const PairingFailure(
+        message: '设备未在配网窗口内返回局域网',
+        diagnostics: '开始探测: 192.168.4.2',
+      );
+    final controller = PairingController(coordinator: coordinator);
+
+    await controller.submitCredentials(
+      ssid: 'HomeWiFi',
+      password: '12345678',
+    );
+
+    expect(controller.state.step, PairingStep.failure);
+    expect(controller.state.errorMessage, '设备未在配网窗口内返回局域网');
+    expect(controller.state.diagnosticsMessage, contains('192.168.4.2'));
+  });
+
   test('从返回 APP 步骤确认后进入 WiFi 表单页', () {
     final controller = PairingController();
 
@@ -112,13 +136,13 @@ void main() {
     expect(controller.state.step, PairingStep.enterWifi);
   });
 
-  test('重试提交前可回到 WiFi 表单并保留已输入内容', () {
+  test('重试提交前会回到重新连接热点步骤并保留已输入内容', () {
     final controller = PairingController();
 
     controller.markWaitingReconnect('HomeWiFi', '12345678');
-    controller.returnToWifiForm();
+    controller.returnToApReconnect();
 
-    expect(controller.state.step, PairingStep.enterWifi);
+    expect(controller.state.step, PairingStep.returnToApp);
     expect(controller.state.ssid, 'HomeWiFi');
     expect(controller.state.password, '12345678');
     expect(controller.state.errorMessage, isNull);

@@ -8,6 +8,7 @@ class PairingState {
     this.ssid = '',
     this.password = '',
     this.errorMessage,
+    this.diagnosticsMessage,
     this.resolvedIpAddress,
   });
 
@@ -15,6 +16,7 @@ class PairingState {
   final String ssid;
   final String password;
   final String? errorMessage;
+  final String? diagnosticsMessage;
   final String? resolvedIpAddress;
 
   PairingState copyWith({
@@ -22,6 +24,7 @@ class PairingState {
     String? ssid,
     String? password,
     Object? errorMessage = _unset,
+    Object? diagnosticsMessage = _unset,
     Object? resolvedIpAddress = _unset,
   }) {
     return PairingState(
@@ -31,6 +34,9 @@ class PairingState {
       errorMessage: identical(errorMessage, _unset)
           ? this.errorMessage
           : errorMessage as String?,
+      diagnosticsMessage: identical(diagnosticsMessage, _unset)
+          ? this.diagnosticsMessage
+          : diagnosticsMessage as String?,
       resolvedIpAddress: identical(resolvedIpAddress, _unset)
           ? this.resolvedIpAddress
           : resolvedIpAddress as String?,

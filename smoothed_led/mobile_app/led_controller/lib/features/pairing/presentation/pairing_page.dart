@@ -11,6 +11,9 @@ enum PairingFlowResult {
   paired,
 }
 
+const _defaultProvisioningSsid = 'CU_3S2p';
+const _defaultProvisioningPassword = 'qpgmfy';
+
 class PairingPage extends ConsumerStatefulWidget {
   const PairingPage({
     super.key,
@@ -29,14 +32,23 @@ class _PairingPageState extends ConsumerState<PairingPage> {
   late final TextEditingController _passwordController;
   Timer? _waitingTimer;
   int _waitingSeconds = 0;
+  bool _obscurePassword = true;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controller ??
         PairingController(coordinator: ref.read(pairingCoordinatorProvider));
-    _ssidController = TextEditingController(text: _controller.state.ssid);
-    _passwordController = TextEditingController(text: _controller.state.password);
+    _ssidController = TextEditingController(
+      text: _controller.state.ssid.isNotEmpty
+          ? _controller.state.ssid
+          : _defaultProvisioningSsid,
+    );
+    _passwordController = TextEditingController(
+      text: _controller.state.password.isNotEmpty
+          ? _controller.state.password
+          : _defaultProvisioningPassword,
+    );
   }
 
   @override
@@ -55,7 +67,8 @@ class _PairingPageState extends ConsumerState<PairingPage> {
     if (_ssidController.text != state.ssid && state.ssid.isNotEmpty) {
       _ssidController.text = state.ssid;
     }
-    if (_passwordController.text != state.password && state.password.isNotEmpty) {
+    if (_passwordController.text != state.password &&
+        state.password.isNotEmpty) {
       _passwordController.text = state.password;
     }
 
@@ -138,10 +151,22 @@ class _PairingPageState extends ConsumerState<PairingPage> {
           const SizedBox(height: 12),
           TextFormField(
             controller: _passwordController,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               labelText: '家庭 WiFi 密码',
+              suffixIcon: IconButton(
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+              ),
             ),
-            obscureText: true,
+            obscureText: _obscurePassword,
           ),
           const SizedBox(height: 24),
           FilledButton(
@@ -192,12 +217,22 @@ class _PairingPageState extends ConsumerState<PairingPage> {
           const Text('配网失败'),
           const SizedBox(height: 12),
           Text(_controller.state.errorMessage ?? '请稍后重试'),
+          if (_controller.state.diagnosticsMessage
+              case final diagnostics?) ...<Widget>[
+            const SizedBox(height: 16),
+            Text(
+              '诊断信息',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const SizedBox(height: 8),
+            SelectableText(diagnostics),
+          ],
           const SizedBox(height: 24),
           FilledButton(
             onPressed: () {
-              setState(_controller.returnToWifiForm);
+              setState(_controller.returnToApReconnect);
             },
-            child: const Text('返回修改 WiFi'),
+            child: const Text('重新连接设备热点'),
           ),
           const SizedBox(height: 12),
           OutlinedButton(

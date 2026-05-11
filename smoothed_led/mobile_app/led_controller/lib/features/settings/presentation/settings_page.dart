@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../pairing/application/pairing_coordinator.dart';
 import '../../pairing/presentation/pairing_page.dart';
 
-class SettingsPage extends StatelessWidget {
+class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
 
   static const _steps = <String>[
@@ -27,7 +29,7 @@ class SettingsPage extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
@@ -63,6 +65,21 @@ class SettingsPage extends StatelessWidget {
                         Navigator.of(context).pop(PairingFlowResult.paired);
                       },
                       child: const Text('去添加设备'),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton(
+                      onPressed: () async {
+                        await ref.read(pairingCoordinatorProvider).resetConfiguration();
+                        if (!context.mounted) {
+                          return;
+                        }
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('设备已重置，请重新连接 LED_Config 后重新配网'),
+                          ),
+                        );
+                      },
+                      child: const Text('重置设备配网'),
                     ),
                   ],
                 ),

@@ -1,6 +1,7 @@
 import ast
 import importlib.util
 import math
+import pytest
 import sys
 import threading
 import time
@@ -9,6 +10,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BOOT_PATH = ROOT / "boot.py"
 MAIN_PATH = ROOT / "main.py"
 
 
@@ -84,6 +86,25 @@ def _load_main_module(monkeypatch):
     return module, calls
 
 
+def _load_boot_module(monkeypatch):
+    calls = {"main_calls": 0}
+    fake_main = types.ModuleType("main")
+    monkeypatch.setitem(sys.modules, "network", types.ModuleType("network"))
+    monkeypatch.setitem(sys.modules, "time", types.ModuleType("time"))
+
+    def start_main():
+        calls["main_calls"] += 1
+
+    fake_main.main = start_main
+    monkeypatch.setitem(sys.modules, "main", fake_main)
+
+    spec = importlib.util.spec_from_file_location("runtime_boot", BOOT_PATH)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module, calls
+
+
 class _FakeSocket:
     def __init__(self, packet):
         self.packet = packet
@@ -110,34 +131,126 @@ class _FakeSocket:
         self.sent.append((payload, addr))
 
 
+class _EmptySocket(_FakeSocket):
+    def __init__(self):
+        super().__init__((b"", ("127.0.0.1", 0)))
+
+    def recvfrom(self, _bufsize):
+        time.sleep(0.01)
+        raise OSError(110, "timed out")
+
+
 def _run_control_mode_with_packet(monkeypatch, packet):
     module, _calls = _load_main_module(monkeypatch)
-    fake_sock = _FakeSocket((packet, ("127.0.0.1", 12345)))
+    control_sock = _FakeSocket((packet, ("127.0.0.1", 12345)))
+    config_sock = _EmptySocket()
+    sockets = [control_sock, config_sock]
+    packet_consumed = {"value": False}
 
-    module.socket.socket = lambda *_args, **_kwargs: fake_sock
+    class _StopLoop(Exception):
+        pass
+
+    module.socket.socket = lambda *_args, **_kwargs: sockets.pop(0)
     module.ANIM_FUNCS = {name: (lambda: None) for name in module.EFFECTS}
+    module.recv_udp_command = lambda sock, _size: (
+        (_ for _ in ()).throw(_StopLoop())
+        if sock is control_sock and packet_consumed["value"]
+        else (
+            packet_consumed.__setitem__("value", True)
+            or (packet.decode().strip(), ("127.0.0.1", 12345))
+        )
+        if sock is control_sock
+        else None
+    )
 
-    thread = threading.Thread(target=module.control_mode, daemon=True)
+    def run():
+        try:
+            module.control_mode()
+        except _StopLoop:
+            return None
+
+    thread = threading.Thread(target=run, daemon=True)
     thread.start()
 
     deadline = time.time() + 0.5
     while time.time() < deadline:
-        if fake_sock.sent:
-            return module, fake_sock
+        if control_sock.sent:
+            return module, control_sock
         time.sleep(0.01)
 
     raise AssertionError("control_mode did not send a response")
 
 
-def _run_config_mode_with_packet(monkeypatch, packet, configure_module=None):
-    module, _calls = _load_main_module(monkeypatch)
-    fake_sock = _FakeSocket((packet, ("127.0.0.1", 12345)))
+def _run_control_mode_with_config_packet(monkeypatch, packet, configure_module=None):
+    module, calls = _load_main_module(monkeypatch)
+    control_sock = _EmptySocket()
+    config_sock = _FakeSocket((packet, ("127.0.0.1", 12345)))
+    sockets = [control_sock, config_sock]
+    config_consumed = {"value": False}
 
-    module.socket.socket = lambda *_args, **_kwargs: fake_sock
+    class _StopLoop(Exception):
+        pass
+
+    module.socket.socket = lambda *_args, **_kwargs: sockets.pop(0)
+    module.ANIM_FUNCS = {name: (lambda: None) for name in module.EFFECTS}
+    module.recv_udp_command = lambda sock, _size: (
+        (_ for _ in ()).throw(_StopLoop())
+        if sock is config_sock and config_consumed["value"]
+        else (
+            config_consumed.__setitem__("value", True)
+            or (packet.decode().strip(), ("127.0.0.1", 12345))
+        )
+        if sock is config_sock
+        else None
+    )
     if configure_module is not None:
         configure_module(module)
 
-    thread = threading.Thread(target=module.config_mode, daemon=True)
+    def run():
+        try:
+            module.control_mode()
+        except _StopLoop:
+            return None
+
+    thread = threading.Thread(target=run, daemon=True)
+    thread.start()
+
+    deadline = time.time() + 0.5
+    while time.time() < deadline:
+        if config_sock.sent:
+            return module, calls, config_sock
+        time.sleep(0.01)
+
+    raise AssertionError("control_mode did not send a config response")
+
+
+def _run_config_mode_with_packet(monkeypatch, packet, configure_module=None):
+    module, _calls = _load_main_module(monkeypatch)
+    fake_sock = _FakeSocket((packet, ("127.0.0.1", 12345)))
+    packet_consumed = {"value": False}
+
+    class _StopLoop(Exception):
+        pass
+
+    module.socket.socket = lambda *_args, **_kwargs: fake_sock
+    module.recv_udp_command = (
+        lambda sock, _size: (
+            (_ for _ in ()).throw(_StopLoop())
+            if packet_consumed["value"]
+            else packet_consumed.__setitem__("value", True)
+            or (packet.decode().strip(), ("127.0.0.1", 12345))
+        )
+    )
+    if configure_module is not None:
+        configure_module(module)
+
+    def run():
+        try:
+            module.config_mode()
+        except _StopLoop:
+            return None
+
+    thread = threading.Thread(target=run, daemon=True)
     thread.start()
 
     deadline = time.time() + 0.5
@@ -191,6 +304,12 @@ def test_main_module_can_be_imported_without_starting_runtime(monkeypatch):
     }
 
 
+def test_boot_module_starts_main_runtime_once(monkeypatch):
+    _module, calls = _load_boot_module(monkeypatch)
+
+    assert calls["main_calls"] == 1
+
+
 def test_parse_control_command_supports_expected_inputs(monkeypatch):
     module, _calls = _load_main_module(monkeypatch)
 
@@ -215,6 +334,8 @@ def test_parse_config_command_supports_expected_inputs(monkeypatch):
     )
     assert module.parse_config_command("status") == ("status", None)
     assert module.parse_config_command("list") == ("list", None)
+    assert module.parse_config_command("diag") == ("diag", None)
+    assert module.parse_config_command("reset") == ("reset", None)
     assert module.parse_config_command("config:missing") == ("error", None)
 
 
@@ -358,6 +479,54 @@ def test_control_mode_unknown_command_returns_error(monkeypatch):
     assert fake_sock.sent == [(b"Error", ("127.0.0.1", 12345))]
 
 
+def test_handle_config_packet_preserves_mixed_case_credentials_when_saving(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    saved = {}
+
+    def fake_save_cfg(ssid, pwd):
+        saved["values"] = (ssid, pwd)
+        return True
+
+    module.save_cfg = fake_save_cfg
+    module.time.sleep = lambda *_args, **_kwargs: None
+    module.machine.reset = lambda: (_ for _ in ()).throw(SystemExit)
+    fake_sock = _FakeSocket((b"", ("127.0.0.1", 0)))
+
+    with pytest.raises(SystemExit):
+        module.handle_config_packet(
+            fake_sock,
+            "config:HomeWiFi:SecretPass",
+            ("127.0.0.1", 12345),
+        )
+
+    assert saved["values"] == ("HomeWiFi", "SecretPass")
+    assert fake_sock.sent == [(b"OK!Rebooting...", ("127.0.0.1", 12345))]
+
+
+def test_handle_config_packet_reset_deletes_cfg_and_reboots(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    events = {"delete_calls": 0}
+
+    def fake_delete_cfg():
+        events["delete_calls"] += 1
+        return True
+
+    module.delete_cfg = fake_delete_cfg
+    module.time.sleep = lambda *_args, **_kwargs: None
+    module.machine.reset = lambda: (_ for _ in ()).throw(SystemExit)
+    fake_sock = _FakeSocket((b"", ("127.0.0.1", 0)))
+
+    with pytest.raises(SystemExit):
+        module.handle_config_packet(
+            fake_sock,
+            "reset",
+            ("127.0.0.1", 12345),
+        )
+
+    assert events["delete_calls"] == 1
+    assert fake_sock.sent == [(b"OK!Rebooting...", ("127.0.0.1", 12345))]
+
+
 def test_config_mode_malformed_config_returns_usage_error(monkeypatch):
     _module, fake_sock = _run_config_mode_with_packet(monkeypatch, b"config:missing")
 
@@ -373,23 +542,70 @@ def test_config_mode_unknown_command_returns_command_list(monkeypatch):
 
 
 def test_config_mode_preserves_mixed_case_credentials_when_saving(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
     saved = {}
 
-    def configure_module(module):
-        def fake_save_cfg(ssid, pwd):
-            saved["values"] = (ssid, pwd)
-            return True
+    def fake_save_cfg(ssid, pwd):
+        saved["values"] = (ssid, pwd)
+        return True
 
-        module.save_cfg = fake_save_cfg
+    module.save_cfg = fake_save_cfg
+    module.time.sleep = lambda *_args, **_kwargs: None
+    module.machine.reset = lambda: (_ for _ in ()).throw(SystemExit)
+    fake_sock = _FakeSocket((b"", ("127.0.0.1", 0)))
 
-    _module, fake_sock = _run_config_mode_with_packet(
-        monkeypatch,
-        b"config:HomeWiFi:SecretPass",
-        configure_module=configure_module,
-    )
+    with pytest.raises(SystemExit):
+        module.handle_config_packet(
+            fake_sock,
+            "config:HomeWiFi:SecretPass",
+            ("127.0.0.1", 12345),
+        )
 
     assert saved["values"] == ("HomeWiFi", "SecretPass")
     assert fake_sock.sent == [(b"OK!Rebooting...", ("127.0.0.1", 12345))]
+
+
+def test_config_mode_diag_returns_detailed_wifi_data(monkeypatch):
+    def configure_module(module):
+        module.load_cfg = lambda: ("HomeWiFi", "secretpass")
+        events = {"scan_calls": 0}
+
+        class FakeWLAN:
+            def __init__(self, interface):
+                self.interface = interface
+
+            def active(self, *_args, **_kwargs):
+                return None
+
+            def config(self, **_kwargs):
+                return None
+
+            def status(self):
+                return -3
+
+            def ifconfig(self):
+                return ("0.0.0.0", "255.255.255.0", "0.0.0.0", "0.0.0.0")
+
+            def scan(self):
+                events["scan_calls"] += 1
+                return []
+
+        module.network.WLAN = lambda interface: FakeWLAN(interface)
+        module._diag_events = events
+
+    module, fake_sock = _run_config_mode_with_packet(
+        monkeypatch,
+        b"diag",
+        configure_module=configure_module,
+    )
+
+    assert fake_sock.sent == [
+        (
+            b"DIAG:status=-3;ifconfig=0.0.0.0,255.255.255.0,0.0.0.0,0.0.0.0",
+            ("127.0.0.1", 12345),
+        )
+    ]
+    assert module._diag_events["scan_calls"] == 0
 
 
 def test_scan_wifis_sorts_by_rssi_descending_and_limits_to_top_five(monkeypatch):
@@ -456,6 +672,40 @@ def test_try_wifi_connects_with_loaded_credentials_and_returns_true(monkeypatch)
     assert events["disconnect_calls"] == 0
 
 
+def test_try_wifi_resets_station_interface_before_connecting(monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    events = {"active_calls": [], "connect": [], "disconnect_calls": 0}
+
+    class FakeWLAN:
+        def __init__(self):
+            self.connected = False
+
+        def active(self, value):
+            events["active_calls"].append(value)
+            return None
+
+        def connect(self, ssid, pwd):
+            events["connect"].append((ssid, pwd))
+            self.connected = events["active_calls"][:2] == [False, True]
+
+        def isconnected(self):
+            return self.connected
+
+        def ifconfig(self):
+            return ("192.168.0.8", "", "", "")
+
+        def disconnect(self):
+            events["disconnect_calls"] += 1
+
+    monkeypatch.setattr(module, "load_cfg", lambda: ("HomeWiFi", "secretpass"))
+    monkeypatch.setattr(module.network, "WLAN", lambda *_args, **_kwargs: FakeWLAN())
+    monkeypatch.setattr(module.time, "sleep", lambda *_args, **_kwargs: None)
+
+    assert module.try_wifi() is True
+    assert events["active_calls"][:2] == [False, True]
+    assert events["connect"] == [("HomeWiFi", "secretpass")]
+
+
 def test_try_wifi_disconnects_and_returns_false_after_timeout(monkeypatch):
     module, _calls = _load_main_module(monkeypatch)
     events = {"connect": [], "disconnect_calls": 0, "sleep_calls": 0}
@@ -486,7 +736,51 @@ def test_try_wifi_disconnects_and_returns_false_after_timeout(monkeypatch):
     assert module.try_wifi() is False
     assert events["connect"] == [("HomeWiFi", "secretpass")]
     assert events["disconnect_calls"] == 1
-    assert events["sleep_calls"] == 50
+    assert events["sleep_calls"] == 152
+
+
+def test_try_wifi_failure_prints_lightweight_status_without_scanning(
+    monkeypatch, capsys
+):
+    module, _calls = _load_main_module(monkeypatch)
+    events = {"disconnect_calls": 0, "scan_calls": 0}
+
+    class FakeWLAN:
+        def active(self, *_args, **_kwargs):
+            return None
+
+        def connect(self, *_args, **_kwargs):
+            return None
+
+        def isconnected(self):
+            return False
+
+        def ifconfig(self):
+            return ("0.0.0.0", "255.255.255.0", "0.0.0.0", "0.0.0.0")
+
+        def status(self):
+            return -3
+
+        def scan(self):
+            events["scan_calls"] += 1
+            return []
+
+        def disconnect(self):
+            events["disconnect_calls"] += 1
+
+    monkeypatch.setattr(module, "load_cfg", lambda: ("HomeWiFi", "secretpass"))
+    monkeypatch.setattr(module.network, "WLAN", lambda *_args, **_kwargs: FakeWLAN())
+    monkeypatch.setattr(module.time, "sleep", lambda *_args, **_kwargs: None)
+
+    assert module.try_wifi() is False
+    output = capsys.readouterr().out
+
+    assert "Fail" in output
+    assert "WiFi status: -3" in output
+    assert "ifconfig: ('0.0.0.0', '255.255.255.0', '0.0.0.0', '0.0.0.0')" in output
+    assert "Visible WiFi:" not in output
+    assert events["disconnect_calls"] == 1
+    assert events["scan_calls"] == 0
 
 
 def test_save_cfg_and_load_cfg_round_trip(tmp_path, monkeypatch):
@@ -495,6 +789,13 @@ def test_save_cfg_and_load_cfg_round_trip(tmp_path, monkeypatch):
 
     assert module.save_cfg("HomeWiFi", "secretpass") is True
     assert module.load_cfg() == ("HomeWiFi", "secretpass")
+
+
+def test_delete_cfg_succeeds_when_file_is_missing(tmp_path, monkeypatch):
+    module, _calls = _load_main_module(monkeypatch)
+    monkeypatch.chdir(tmp_path)
+
+    assert module.delete_cfg() is True
 
 
 def test_is_timeout_error_only_accepts_timeout_style_oserror(monkeypatch):

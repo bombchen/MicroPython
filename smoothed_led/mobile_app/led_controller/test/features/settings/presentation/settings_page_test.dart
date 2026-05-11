@@ -5,8 +5,15 @@ import 'package:led_controller/features/pairing/application/pairing_coordinator.
 import 'package:led_controller/features/settings/presentation/settings_page.dart';
 
 class FakePairingCoordinator implements PairingCoordinator {
+  bool didReset = false;
+
   @override
   Future<void> openWifiSettings() async {}
+
+  @override
+  Future<void> resetConfiguration() async {
+    didReset = true;
+  }
 
   @override
   Future<String> submitCredentials({
@@ -21,10 +28,18 @@ void main() {
   testWidgets('帮助页展示结构化帮助中心内容', (tester) async {
     final faqAnswerSnippet = find.textContaining('设备刚上电');
 
-    await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          pairingCoordinatorProvider.overrideWithValue(FakePairingCoordinator()),
+        ],
+        child: const MaterialApp(home: SettingsPage()),
+      ),
+    );
 
     expect(find.text('配网帮助'), findsOneWidget);
     expect(find.text('去添加设备'), findsOneWidget);
+    expect(find.text('重置设备配网'), findsOneWidget);
 
     expect(find.text('配网步骤'), findsOneWidget);
     expect(find.text('连接设备热点 LED_Config'), findsOneWidget);
@@ -62,5 +77,24 @@ void main() {
 
     expect(find.text('添加设备'), findsOneWidget);
     expect(find.text('开始配网'), findsOneWidget);
+  });
+
+  testWidgets('帮助页点击重置设备配网后显示成功提示', (tester) async {
+    final coordinator = FakePairingCoordinator();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          pairingCoordinatorProvider.overrideWithValue(coordinator),
+        ],
+        child: const MaterialApp(home: SettingsPage()),
+      ),
+    );
+
+    await tester.tap(find.text('重置设备配网'));
+    await tester.pumpAndSettle();
+
+    expect(coordinator.didReset, isTrue);
+    expect(find.text('设备已重置，请重新连接 LED_Config 后重新配网'), findsOneWidget);
   });
 }

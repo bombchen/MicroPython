@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:led_controller/features/pairing/application/pairing_controller.dart';
 import 'package:led_controller/features/pairing/application/pairing_coordinator.dart';
+import 'package:led_controller/features/pairing/application/pairing_failure.dart';
 import 'package:led_controller/features/pairing/presentation/pairing_page.dart';
 
 class FakePairingCoordinator implements PairingCoordinator {
@@ -13,6 +14,9 @@ class FakePairingCoordinator implements PairingCoordinator {
   Future<void> openWifiSettings() async {
     didOpenWifi = true;
   }
+
+  @override
+  Future<void> resetConfiguration() async {}
 
   @override
   Future<String> submitCredentials({
@@ -30,6 +34,28 @@ class FakePairingCoordinator implements PairingCoordinator {
 }
 
 void main() {
+  testWidgets('进入 WiFi 表单时默认填充测试用 SSID 和密码', (tester) async {
+    final coordinator = FakePairingCoordinator();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PairingPage(
+          controller: PairingController(coordinator: coordinator),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('CU_3S2p'), findsOneWidget);
+    expect(find.text('qpgmfy'), findsOneWidget);
+  });
+
   testWidgets('配网成功后完成按钮返回语义化结果', (tester) async {
     final coordinator = FakePairingCoordinator();
     PairingFlowResult? result;
@@ -107,9 +133,12 @@ void main() {
     expect(find.textContaining('192.168.1.23'), findsOneWidget);
   });
 
-  testWidgets('配网失败后可保留输入并返回表单重试', (tester) async {
+  testWidgets('配网失败后会引导重新连接热点并保留输入内容', (tester) async {
     final coordinator = FakePairingCoordinator()
-      ..submitError = Exception('设备未在配网窗口内返回局域网');
+      ..submitError = const PairingFailure(
+        message: '设备未在配网窗口内返回局域网',
+        diagnostics: '开始探测: 192.168.4.2',
+      );
 
     await tester.pumpWidget(
       MaterialApp(
@@ -131,9 +160,17 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('配网失败'), findsOneWidget);
-    expect(find.textContaining('设备未在配网窗口内返回局域网'), findsOneWidget);
+    expect(find.text('设备未在配网窗口内返回局域网'), findsOneWidget);
+    expect(find.text('诊断信息'), findsOneWidget);
+    expect(find.textContaining('192.168.4.2'), findsOneWidget);
 
-    await tester.tap(find.text('返回修改 WiFi'));
+    await tester.tap(find.text('重新连接设备热点'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('步骤 3/5'), findsOneWidget);
+    expect(find.text('连接设备热点后返回 APP，再继续下一步。'), findsOneWidget);
+
+    await tester.tap(find.text('我已连接，继续'));
     await tester.pumpAndSettle();
 
     expect(find.text('步骤 4/5'), findsOneWidget);

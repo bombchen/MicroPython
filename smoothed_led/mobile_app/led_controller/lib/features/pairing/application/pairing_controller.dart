@@ -1,6 +1,7 @@
 import '../domain/pairing_state.dart';
 import '../domain/pairing_step.dart';
 import 'pairing_coordinator.dart';
+import 'pairing_failure.dart';
 
 class PairingController {
   PairingController({PairingCoordinator? coordinator})
@@ -32,6 +33,16 @@ class PairingController {
     _state = _state.copyWith(
       step: PairingStep.enterWifi,
       errorMessage: null,
+      diagnosticsMessage: null,
+    );
+  }
+
+  void returnToApReconnect() {
+    _state = _state.copyWith(
+      step: PairingStep.returnToApp,
+      errorMessage: null,
+      diagnosticsMessage: null,
+      resolvedIpAddress: null,
     );
   }
 
@@ -41,6 +52,7 @@ class PairingController {
       ssid: ssid,
       password: password,
       errorMessage: null,
+      diagnosticsMessage: null,
       resolvedIpAddress: null,
     );
   }
@@ -63,11 +75,20 @@ class PairingController {
         step: PairingStep.success,
         resolvedIpAddress: ip,
         errorMessage: null,
+        diagnosticsMessage: null,
+      );
+    } on PairingFailure catch (error) {
+      _state = _state.copyWith(
+        step: PairingStep.failure,
+        errorMessage: error.message,
+        diagnosticsMessage: error.diagnostics,
+        resolvedIpAddress: null,
       );
     } catch (error) {
       _state = _state.copyWith(
         step: PairingStep.failure,
         errorMessage: '$error',
+        diagnosticsMessage: null,
         resolvedIpAddress: null,
       );
     }
@@ -79,6 +100,11 @@ class _MissingPairingCoordinator implements PairingCoordinator {
 
   @override
   Future<void> openWifiSettings() {
+    throw StateError('PairingCoordinator is required for runtime actions');
+  }
+
+  @override
+  Future<void> resetConfiguration() {
     throw StateError('PairingCoordinator is required for runtime actions');
   }
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'broadcast_target_resolver.dart';
 import 'udp_client.dart';
 
 class IoUdpClient implements UdpClient {
@@ -80,11 +81,11 @@ class IoUdpClient implements UdpClient {
         },
       );
 
-      socket.send(
-        utf8.encode(payload),
-        InternetAddress('255.255.255.255'),
-        port,
-      );
+      final bytes = utf8.encode(payload);
+      final targets = await _resolveBroadcastTargets();
+      for (final target in targets) {
+        socket.send(bytes, target, port);
+      }
 
       return await completer.future.timeout(
         timeout,
@@ -103,5 +104,20 @@ class IoUdpClient implements UdpClient {
     }
 
     return (await InternetAddress.lookup(host)).first;
+  }
+
+  Future<List<InternetAddress>> _resolveBroadcastTargets() async {
+    final interfaces = await NetworkInterface.list(
+      type: InternetAddressType.IPv4,
+      includeLoopback: false,
+      includeLinkLocal: false,
+    );
+    final localAddresses = interfaces
+        .expand((interface) => interface.addresses)
+        .map((address) => address.address);
+
+    return resolveBroadcastTargets(localAddresses)
+        .map(InternetAddress.new)
+        .toList(growable: false);
   }
 }

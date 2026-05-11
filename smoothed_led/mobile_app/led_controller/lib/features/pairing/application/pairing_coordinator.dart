@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/network/local_network_diagnostics.dart';
 import '../../../core/network/pairing_probe_service.dart';
 import '../../../core/network/udp_client.dart';
 import '../../../core/network/udp_led_protocol.dart';
@@ -11,6 +14,7 @@ import '../../devices/domain/device_repository.dart';
 import '../../devices/domain/device_status.dart';
 import '../../devices/domain/effect_mode.dart';
 import '../../devices/domain/led_device.dart';
+import 'pairing_failure.dart';
 
 final pairingCoordinatorProvider = Provider<PairingCoordinator>((ref) {
   return DefaultPairingCoordinator(
@@ -22,6 +26,8 @@ final pairingCoordinatorProvider = Provider<PairingCoordinator>((ref) {
 
 abstract class PairingCoordinator {
   Future<void> openWifiSettings();
+
+  Future<void> resetConfiguration();
 
   Future<String> submitCredentials({
     required String ssid,
@@ -35,13 +41,17 @@ class DefaultPairingCoordinator implements PairingCoordinator {
     required this.udpClient,
     required this.deviceRepository,
     PairingProbeService? pairingProbeService,
-  }) : pairingProbeService = pairingProbeService ??
-            PairingProbeService(udpClient, UdpLedProtocol());
+    LocalNetworkDiagnostics? localNetworkDiagnostics,
+  })  : pairingProbeService = pairingProbeService ??
+            PairingProbeService(udpClient, UdpLedProtocol()),
+        localNetworkDiagnostics =
+            localNetworkDiagnostics ?? IoLocalNetworkDiagnostics();
 
   final WifiSettingsLauncher wifiSettingsLauncher;
   final UdpClient udpClient;
   final DeviceRepository deviceRepository;
   final PairingProbeService pairingProbeService;
+  final LocalNetworkDiagnostics localNetworkDiagnostics;
 
   @override
   Future<void> openWifiSettings() {
@@ -49,19 +59,28 @@ class DefaultPairingCoordinator implements PairingCoordinator {
   }
 
   @override
+  Future<void> resetConfiguration() async {
+    await _sendProvisioningPayload('reset');
+  }
+
+  @override
   Future<String> submitCredentials({
     required String ssid,
     required String password,
   }) async {
-    await udpClient.send(
-      host: '192.168.4.1',
-      port: 8889,
-      payload: 'config:$ssid:$password',
-    );
+    await _sendProvisioningPayload('config:$ssid:$password');
 
+    final startSnapshot = await localNetworkDiagnostics.capture();
     final ip = await pairingProbeService.resolveDeviceIp();
     if (ip == null) {
-      throw Exception('设备未在配网窗口内返回局域网');
+      final endSnapshot = await localNetworkDiagnostics.capture();
+      throw PairingFailure(
+        message: '设备未在配网窗口内返回局域网',
+        diagnostics: _buildDiagnostics(
+          startSnapshot: startSnapshot,
+          endSnapshot: endSnapshot,
+        ),
+      );
     }
 
     final now = DateTime.now();
@@ -82,5 +101,37 @@ class DefaultPairingCoordinator implements PairingCoordinator {
     );
 
     return ip;
+  }
+
+  Future<void> _sendProvisioningPayload(String payload) async {
+    try {
+      await udpClient.send(
+        host: '192.168.4.1',
+        port: 8889,
+        payload: payload,
+      );
+    } on TimeoutException {
+      final existingIp = await pairingProbeService.resolveDeviceIp();
+      if (existingIp == null) {
+        rethrow;
+      }
+      await udpClient.send(
+        host: existingIp,
+        port: 8889,
+        payload: payload,
+      );
+    }
+  }
+
+  String _buildDiagnostics({
+    required LocalNetworkSnapshot startSnapshot,
+    required LocalNetworkSnapshot endSnapshot,
+  }) {
+    return [
+      '开始探测',
+      startSnapshot.describe(),
+      '结束探测',
+      endSnapshot.describe(),
+    ].join('\n');
   }
 }
