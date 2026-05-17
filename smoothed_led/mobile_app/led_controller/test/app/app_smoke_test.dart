@@ -1,5 +1,6 @@
-import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:led_controller/app/app.dart';
 import 'package:led_controller/features/devices/application/device_list_controller.dart';
 import 'package:led_controller/features/devices/domain/device_repository.dart';
@@ -21,6 +22,24 @@ class EmptyDeviceRepository implements DeviceRepository {
 }
 
 void main() {
+  testWidgets('应用使用消费品化浅暖主题', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceRepositoryProvider.overrideWithValue(EmptyDeviceRepository()),
+        ],
+        child: const LedControllerApp(),
+      ),
+    );
+
+    final materialApp = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    final theme = materialApp.theme!;
+
+    expect(theme.scaffoldBackgroundColor, isNot(Colors.white));
+    expect(theme.cardTheme.shape, isNotNull);
+    expect(theme.filledButtonTheme.style, isNotNull);
+  });
+
   testWidgets('启动后默认显示设备列表空状态', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
