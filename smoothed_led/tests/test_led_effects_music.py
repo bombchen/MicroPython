@@ -14,6 +14,25 @@ class FakeADC:
         return value
 
 
+class FakeNeoPixel:
+    def __init__(self, count):
+        self.buf = [(0, 0, 0)] * count
+        self.write_count = 0
+
+    def __setitem__(self, index, value):
+        self.buf[index] = value
+
+    def __getitem__(self, index):
+        return self.buf[index]
+
+    def fill(self, value):
+        for index in range(len(self.buf)):
+            self.buf[index] = value
+
+    def write(self):
+        self.write_count += 1
+
+
 class MusicUpdateStateTest(unittest.TestCase):
     def setUp(self):
         self._orig_sleep_ms = getattr(fx.time, "sleep_ms", None)
@@ -45,6 +64,39 @@ class MusicUpdateStateTest(unittest.TestCase):
         self.assertGreater(updated["energy"], 64)
         self.assertGreater(updated["peak"], 0)
         self.assertGreater(updated["flash"], 0)
+
+
+class MusicRenderTest(unittest.TestCase):
+    def setUp(self):
+        self._orig_sleep_ms = getattr(fx.time, "sleep_ms", None)
+        fx.time.sleep_ms = lambda _: None
+
+    def tearDown(self):
+        if self._orig_sleep_ms is None:
+            delattr(fx.time, "sleep_ms")
+        else:
+            fx.time.sleep_ms = self._orig_sleep_ms
+
+    def test_music_render_expands_from_center(self):
+        np = FakeNeoPixel(10)
+        state = fx.music_state()
+        state.update({"energy": 180, "flash": 90})
+
+        fx.music_render(np, 10, lambda c: c, state)
+
+        self.assertEqual(np.write_count, 1)
+        self.assertNotEqual(np[4], (0, 0, 0))
+        self.assertNotEqual(np[5], (0, 0, 0))
+        self.assertGreater(sum(np[4]), sum(np[0]))
+
+    def test_music_entry_updates_state_and_renders(self):
+        np = FakeNeoPixel(8)
+        adc = FakeADC([512, 620, 410, 600, 420, 610, 405, 590])
+
+        state = fx.music(np, 8, lambda c: c, adc, {})
+
+        self.assertIn("baseline", state)
+        self.assertGreaterEqual(np.write_count, 1)
 
 
 if __name__ == "__main__":

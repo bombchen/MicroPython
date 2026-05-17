@@ -14,6 +14,7 @@ MUSIC_PEAK_MIN=24
 MUSIC_PEAK_DECAY=2
 MUSIC_FLASH_STRENGTH=160
 MUSIC_FLASH_DECAY=24
+MUSIC_BACKGROUND=(0,2,6)
 
 def wave_level(a):
     a%=360
@@ -54,6 +55,34 @@ def music_update_state(adc,anim_state,sample_count=MUSIC_SAMPLES):
     anim_state["energy"]=0 if peak<=0 else smoothed*255//peak
     anim_state["flash"]=flash
     return anim_state
+def music_color(energy):
+    if energy<85:return(0,32+energy*2,96+energy)
+    if energy<170:
+        energy-=85
+        return(energy*2,200+energy//2,255-energy)
+    energy-=170
+    return(255,180-energy,120-energy//2)
+def music_render(np,led_count,setb,anim_state):
+    energy=anim_state["energy"];flash=anim_state["flash"]
+    left=(led_count-1)//2;right=led_count//2
+    span=energy*((led_count+1)//2)//255
+    if energy and span<1:span=1
+    bg=setb(MUSIC_BACKGROUND)
+    for i in range(led_count):np[i]=bg
+    for offset in range(span):
+        fade=255-(offset*180//max(1,span))
+        level=energy*fade//255
+        rgb=music_color(level)
+        if flash:
+            boost=flash*(span-offset)//max(1,span)
+            rgb=(min(255,rgb[0]+boost),min(255,rgb[1]+boost),min(255,rgb[2]+boost))
+        li=left-offset;ri=right+offset
+        if 0<=li<led_count:np[li]=setb(rgb)
+        if 0<=ri<led_count:np[ri]=setb(rgb)
+    np.write();time.sleep_ms(25);return anim_state
+def music(np,led_count,setb,adc,anim_state):
+    anim_state=music_update_state(adc,anim_state)
+    return music_render(np,led_count,setb,anim_state)
 def rainbow(np,led_count,setb,wheel,frame_count):
     j=frame_count%256
     for i in range(led_count):np[i]=setb(wheel((i*256//led_count+j)&255))
