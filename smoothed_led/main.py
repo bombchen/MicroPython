@@ -20,6 +20,7 @@ WIFI_CONNECT_ATTEMPTS = 150
 mode = "rainbow"
 brightness = 180
 np = None
+adc = None
 frame_count = 0
 anim_state = {}
 
@@ -28,7 +29,7 @@ STARRY_COLORS = fx.STARRY_COLORS
 CHASE_COLORS = fx.CHASE_COLORS
 SPARKLE_COLORS = fx.SPARKLE_COLORS
 WAVE_LEVELS = fx.WAVE_LEVELS
-EFFECTS = ("rainbow", "breath", "fire", "starry", "wave", "chase", "sparkle", "snake")
+EFFECTS = ("rainbow", "breath", "fire", "starry", "wave", "chase", "sparkle", "snake", "music")
 EFFECTS_TEXT = "|".join(EFFECTS)
 CONTROL_HELP_TEXT = "mode:(%s|next|prev),bright:0-255,status" % EFFECTS_TEXT
 CONFIG_COMMANDS_TEXT = "Commands:config:SSID:PWD, status, list, diag, reset"
@@ -352,6 +353,11 @@ def snake():
     anim_state = fx.snake(np, LED_COUNT, setb, anim_state)
 
 
+def music():
+    global anim_state
+    anim_state = fx.music(np, LED_COUNT, setb, adc, anim_state)
+
+
 ANIM_FUNCS = {
     "rainbow": rainbow,
     "breath": breath,
@@ -361,12 +367,14 @@ ANIM_FUNCS = {
     "chase": chase,
     "sparkle": sparkle,
     "snake": snake,
+    "music": music,
 }
 
 
 def main():
-    global np
+    global np, adc
     np = neopixel.NeoPixel(Pin(LED_PIN, Pin.OUT), LED_COUNT)
+    adc = machine.ADC(0)
     np.fill((0, 0, 0))
     np.write()
     init_anim()
