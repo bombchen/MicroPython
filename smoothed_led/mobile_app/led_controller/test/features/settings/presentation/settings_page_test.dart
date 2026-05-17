@@ -26,7 +26,7 @@ class FakePairingCoordinator implements PairingCoordinator {
 }
 
 void main() {
-  testWidgets('帮助页展示结构化帮助中心内容', (tester) async {
+  testWidgets('帮助页展示支持中心头部和主操作区', (tester) async {
     final faqAnswerSnippet = find.textContaining('设备刚上电');
 
     await tester.pumpWidget(
@@ -38,8 +38,9 @@ void main() {
       ),
     );
 
-    expect(find.text('配网帮助'), findsOneWidget);
-    expect(find.text('去添加设备'), findsOneWidget);
+    expect(find.text('支持中心'), findsWidgets);
+    expect(find.text('我们会一步步帮你连接和排查设备'), findsOneWidget);
+    expect(find.text('添加新设备'), findsOneWidget);
     expect(find.text('重置设备配网'), findsOneWidget);
 
     expect(find.text('配网步骤'), findsOneWidget);
@@ -57,6 +58,8 @@ void main() {
     expect(find.text('看不到 LED_Config'), findsOneWidget);
     expect(faqAnswerSnippet, findsNothing);
 
+    await tester.ensureVisible(find.text('看不到 LED_Config'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('看不到 LED_Config'));
     await tester.pumpAndSettle();
 
@@ -73,7 +76,7 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('去添加设备'));
+    await tester.tap(find.text('添加新设备'));
     await tester.pumpAndSettle();
 
     expect(find.text('添加设备'), findsOneWidget);

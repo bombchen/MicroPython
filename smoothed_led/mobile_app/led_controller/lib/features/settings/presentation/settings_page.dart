@@ -33,60 +33,78 @@ class SettingsPage extends ConsumerWidget {
     final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('配网帮助')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(10),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '用于首次配网和常见问题排查',
-                      style: textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    FilledButton(
-                      onPressed: () async {
-                        final result =
-                            await Navigator.of(context).push<PairingFlowResult>(
-                          MaterialPageRoute(
-                            builder: (_) => const PairingPage(),
-                          ),
-                        );
-                        if (result != PairingFlowResult.paired ||
-                            !context.mounted) {
-                          return;
-                        }
-                        Navigator.of(context).pop(PairingFlowResult.paired);
-                      },
-                      child: const Text('去添加设备'),
-                    ),
-                    const SizedBox(height: 8),
-                    OutlinedButton(
-                      onPressed: () async {
-                        await ref.read(pairingCoordinatorProvider).resetConfiguration();
-                        if (!context.mounted) {
-                          return;
-                        }
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('设备已重置，请重新连接 LED_Config 后重新配网'),
-                          ),
-                        );
-                      },
-                      child: const Text('重置设备配网'),
-                    ),
-                  ],
-                ),
+      appBar: AppBar(title: const Text('支持中心')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '支持中心',
+                    style: textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '我们会一步步帮你连接和排查设备',
+                    style: textTheme.bodyLarge,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 4),
-            ExpansionTile(
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '常用操作',
+                    style: textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () async {
+                      final result =
+                          await Navigator.of(context).push<PairingFlowResult>(
+                        MaterialPageRoute(
+                          builder: (_) => const PairingPage(),
+                        ),
+                      );
+                      if (result != PairingFlowResult.paired ||
+                          !context.mounted) {
+                        return;
+                      }
+                      Navigator.of(context).pop(PairingFlowResult.paired);
+                    },
+                    child: const Text('添加新设备'),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: () async {
+                      await ref.read(pairingCoordinatorProvider).resetConfiguration();
+                      if (!context.mounted) {
+                        return;
+                      }
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('设备已重置，请重新连接 LED_Config 后重新配网'),
+                        ),
+                      );
+                    },
+                    child: const Text('重置设备配网'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ExpansionTile(
               tilePadding: const EdgeInsets.symmetric(horizontal: 12),
               childrenPadding: const EdgeInsets.only(bottom: 4),
               initiallyExpanded: true,
@@ -102,8 +120,8 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   )
                   .toList(),
-            ),
-            ExpansionTile(
+          ),
+          ExpansionTile(
               tilePadding: const EdgeInsets.symmetric(horizontal: 12),
               title: const Text('常见故障'),
               children: _faqItems
@@ -121,8 +139,8 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   )
                   .toList(),
-            ),
-            ExpansionTile(
+          ),
+          ExpansionTile(
               tilePadding: const EdgeInsets.symmetric(horizontal: 12),
               childrenPadding: const EdgeInsets.only(bottom: 4),
               title: const Text('系统与权限说明'),
@@ -137,9 +155,8 @@ class SettingsPage extends ConsumerWidget {
                     ),
                   )
                   .toList(),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
