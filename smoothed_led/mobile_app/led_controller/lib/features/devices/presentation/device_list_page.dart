@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../settings/presentation/settings_page.dart';
 import '../application/device_list_controller.dart';
 import '../domain/device_status.dart';
+import '../domain/effect_mode.dart';
+import '../domain/led_device.dart';
 import 'device_control_page.dart';
 import '../../pairing/presentation/pairing_page.dart';
 
@@ -63,10 +65,9 @@ class _DeviceListPageState extends ConsumerState<DeviceListPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('我的设备'),
         actions: [
           IconButton(
-            tooltip: '刷新设备状态',
+            tooltip: '刷新全部',
             icon: _isRefreshing
                 ? const SizedBox(
                     width: 18,
@@ -77,7 +78,7 @@ class _DeviceListPageState extends ConsumerState<DeviceListPage> {
             onPressed: _isRefreshing ? null : _refreshDevices,
           ),
           IconButton(
-            icon: const Icon(Icons.settings_outlined),
+            icon: const Icon(Icons.tune_outlined),
             onPressed: () async {
               final result =
                   await Navigator.of(context).push<PairingFlowResult>(
@@ -95,63 +96,97 @@ class _DeviceListPageState extends ConsumerState<DeviceListPage> {
       ),
       body: devicesAsync.when(
         data: (devices) {
-          if (devices.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('还没有设备'),
-                  const SizedBox(height: 12),
-                  FilledButton(
-                    onPressed: () async {
-                      final result =
-                          await Navigator.of(context).push<PairingFlowResult>(
-                        MaterialPageRoute(
-                          builder: (_) => const PairingPage(),
-                        ),
-                      );
-                      if (result != PairingFlowResult.paired ||
-                          !context.mounted) {
-                        return;
-                      }
-                      _handleSuccessfulPairing(context, ref);
-                    },
-                    child: const Text('添加设备'),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.separated(
-            itemCount: devices.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final device = devices[index];
-              return ListTile(
-                title: Text(device.name),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(device.ipAddress),
-                    const SizedBox(height: 4),
-                    Text(_statusLabel(device.lastKnownStatus.connectionState)),
-                    Text('最近同步: ${_formatDateTime(device.lastSeenAt)}'),
-                  ],
-                ),
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => DeviceControlPage(
-                        device: device,
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '我的灯光',
+                        style: Theme.of(context).textTheme.headlineMedium,
                       ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '随时调出家里的氛围',
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                      const SizedBox(height: 20),
+                      FilledButton(
+                        onPressed: () async {
+                          final result =
+                              await Navigator.of(context).push<PairingFlowResult>(
+                            MaterialPageRoute(
+                              builder: (_) => const PairingPage(),
+                            ),
+                          );
+                          if (result != PairingFlowResult.paired ||
+                              !context.mounted) {
+                            return;
+                          }
+                          _handleSuccessfulPairing(context, ref);
+                        },
+                        child: Text(devices.isEmpty ? '添加第一台灯带' : '添加设备'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              if (devices.isEmpty)
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.light_outlined,
+                          size: 48,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '还没有设备',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '添加灯带后，你就可以在这里查看状态并调整灯效。',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                ...devices.map((device) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _DeviceCard(
+                      device: device,
+                      statusLabel: _statusLabel(
+                        device.lastKnownStatus.connectionState,
+                      ),
+                      modeLabel: _modeLabel(device.lastKnownStatus.mode),
+                      lastSyncLabel: _formatDateTime(device.lastSeenAt),
+                      onTap: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => DeviceControlPage(
+                              device: device,
+                            ),
+                          ),
+                        );
+                        ref.invalidate(deviceListProvider);
+                      },
                     ),
                   );
-                  ref.invalidate(deviceListProvider);
-                },
-              );
-            },
+                }),
+            ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -173,10 +208,101 @@ class _DeviceListPageState extends ConsumerState<DeviceListPage> {
     }
   }
 
+  String _modeLabel(EffectMode mode) {
+    switch (mode) {
+      case EffectMode.rainbow:
+        return '彩虹';
+      case EffectMode.breath:
+        return '呼吸';
+      case EffectMode.fire:
+        return '火焰';
+      case EffectMode.starry:
+        return '星空';
+      case EffectMode.wave:
+        return '波浪';
+      case EffectMode.chase:
+        return '追逐';
+      case EffectMode.sparkle:
+        return '闪烁';
+      case EffectMode.snake:
+        return '蛇形';
+      case EffectMode.music:
+        return '音乐律动';
+    }
+  }
+
   String _formatDateTime(DateTime value) {
     String pad(int number) => number.toString().padLeft(2, '0');
 
     return '${value.year}-${pad(value.month)}-${pad(value.day)} '
         '${pad(value.hour)}:${pad(value.minute)}';
+  }
+}
+
+class _DeviceCard extends StatelessWidget {
+  const _DeviceCard({
+    required this.device,
+    required this.statusLabel,
+    required this.modeLabel,
+    required this.lastSyncLabel,
+    required this.onTap,
+  });
+
+  final LedDevice device;
+  final String statusLabel;
+  final String modeLabel;
+  final String lastSyncLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      device.name,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: scheme.primary.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      child: Text(statusLabel),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                modeLabel,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(device.ipAddress),
+              const SizedBox(height: 8),
+              Text('最近同步: $lastSyncLabel'),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -161,7 +161,7 @@ Future<void> completePairingHappyPath(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('设备列表页展示空状态', (tester) async {
+  testWidgets('设备列表页展示家庭灯光首页头部和主按钮', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -174,11 +174,13 @@ void main() {
 
     await tester.pumpAndSettle();
 
+    expect(find.text('我的灯光'), findsOneWidget);
+    expect(find.text('随时调出家里的氛围'), findsOneWidget);
     expect(find.text('还没有设备'), findsOneWidget);
-    expect(find.text('添加设备'), findsOneWidget);
+    expect(find.text('添加第一台灯带'), findsOneWidget);
   });
 
-  testWidgets('设备列表页展示已保存设备', (tester) async {
+  testWidgets('设备列表页用设备卡展示状态摘要', (tester) async {
     final devices = [
       LedDevice(
         id: 'device-1',
@@ -210,6 +212,8 @@ void main() {
 
     expect(find.text('客厅灯带'), findsOneWidget);
     expect(find.text('192.168.1.23'), findsOneWidget);
+    expect(find.text('火焰'), findsOneWidget);
+    expect(find.text('在线'), findsOneWidget);
   });
 
   testWidgets('设备列表页进入后自动刷新状态并展示最近同步时间', (tester) async {
@@ -290,7 +294,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('在线'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('刷新设备状态'));
+    await tester.tap(find.byTooltip('刷新全部'));
     await tester.pumpAndSettle();
 
     expect(udpClient.payloads, <String>[
@@ -347,7 +351,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.tap(find.byIcon(Icons.tune_outlined));
     await tester.pumpAndSettle();
 
     expect(find.text('配网帮助'), findsOneWidget);
@@ -370,7 +374,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.text('添加设备'));
+    await tester.tap(find.text('添加第一台灯带'));
     await tester.pumpAndSettle();
     await completePairingHappyPath(tester);
 
@@ -395,7 +399,7 @@ void main() {
     );
 
     await tester.pumpAndSettle();
-    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.tap(find.byIcon(Icons.tune_outlined));
     await tester.pumpAndSettle();
 
     expect(find.text('配网帮助'), findsOneWidget);
