@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:led_controller/features/pairing/application/pairing_controller.dart';
@@ -7,8 +9,10 @@ import 'package:led_controller/features/pairing/presentation/pairing_page.dart';
 
 class FakePairingCoordinator implements PairingCoordinator {
   bool didOpenWifi = false;
-  Object? submitError;
-  Duration submitDelay = Duration.zero;
+  Object? sendError;
+  Object? waitError;
+  Duration sendDelay = Duration.zero;
+  Duration waitDelay = Duration.zero;
 
   @override
   Future<void> openWifiSettings() async {
@@ -19,15 +23,25 @@ class FakePairingCoordinator implements PairingCoordinator {
   Future<void> resetConfiguration() async {}
 
   @override
-  Future<String> submitCredentials({
+  Future<void> sendCredentials({
     required String ssid,
     required String password,
   }) async {
-    if (submitDelay > Duration.zero) {
-      await Future<void>.delayed(submitDelay);
+    if (sendDelay > Duration.zero) {
+      await Future<void>.delayed(sendDelay);
     }
-    if (submitError != null) {
-      throw submitError!;
+    if (sendError != null) {
+      throw sendError!;
+    }
+  }
+
+  @override
+  Future<String> waitForDeviceRegistration() async {
+    if (waitDelay > Duration.zero) {
+      await Future<void>.delayed(waitDelay);
+    }
+    if (waitError != null) {
+      throw waitError!;
     }
     return '192.168.1.23';
   }
@@ -133,9 +147,9 @@ void main() {
     expect(find.textContaining('192.168.1.23'), findsOneWidget);
   });
 
-  testWidgets('配网失败后会引导重新连接热点并保留输入内容', (tester) async {
+  testWidgets('设备回网超时后展示诊断信息和继续等待动作', (tester) async {
     final coordinator = FakePairingCoordinator()
-      ..submitError = const PairingFailure(
+      ..waitError = const PairingFailure(
         message: '设备未在配网窗口内返回局域网',
         diagnostics: '开始探测: 192.168.4.2',
       );
@@ -164,23 +178,13 @@ void main() {
     expect(find.text('诊断信息'), findsOneWidget);
     expect(find.textContaining('192.168.4.2'), findsOneWidget);
 
-    await tester.tap(find.text('重新连接设备热点'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('步骤 3/5'), findsOneWidget);
-    expect(find.text('连接设备热点后返回 APP，再继续下一步。'), findsOneWidget);
-
-    await tester.tap(find.text('我已连接，继续'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('步骤 4/5'), findsOneWidget);
-    expect(find.text('HomeWiFi'), findsOneWidget);
-    expect(find.text('12345678'), findsOneWidget);
+    expect(find.text('继续等待一次'), findsOneWidget);
+    expect(find.text('重新开始'), findsOneWidget);
   });
 
   testWidgets('提交后立即展示等待重连反馈', (tester) async {
     final coordinator = FakePairingCoordinator()
-      ..submitDelay = const Duration(seconds: 2);
+      ..waitDelay = const Duration(seconds: 2);
 
     await tester.pumpWidget(
       MaterialApp(
@@ -207,5 +211,97 @@ void main() {
 
     await tester.pump(const Duration(seconds: 2));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('发送配网信息时先展示发送中步骤', (tester) async {
+    final coordinator = FakePairingCoordinator()
+      ..sendDelay = const Duration(seconds: 2);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PairingPage(
+          controller: PairingController(coordinator: coordinator),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'HomeWiFi');
+    await tester.enterText(find.byType(TextFormField).at(1), '12345678');
+    await tester.tap(find.text('发送配网信息'));
+    await tester.pump();
+
+    expect(find.text('正在发送配网信息'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('发送配置失败后可原地重试并保留输入内容', (tester) async {
+    final coordinator = FakePairingCoordinator()
+      ..sendError = TimeoutException('config timed out');
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PairingPage(
+          controller: PairingController(coordinator: coordinator),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'HomeWiFi');
+    await tester.enterText(find.byType(TextFormField).at(1), '12345678');
+    await tester.tap(find.text('发送配网信息'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('重试发送配网信息'), findsOneWidget);
+    expect(find.text('返回 WiFi 表单'), findsOneWidget);
+
+    await tester.tap(find.text('返回 WiFi 表单'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('步骤 4/5'), findsOneWidget);
+    expect(find.text('HomeWiFi'), findsOneWidget);
+    expect(find.text('12345678'), findsOneWidget);
+  });
+
+  testWidgets('设备回网超时后允许继续等待一次', (tester) async {
+    final coordinator = FakePairingCoordinator()
+      ..waitError = const PairingFailure(
+        message: '设备未在配网窗口内返回局域网',
+        diagnostics: '开始探测: 192.168.4.2',
+      );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PairingPage(
+          controller: PairingController(coordinator: coordinator),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'HomeWiFi');
+    await tester.enterText(find.byType(TextFormField).at(1), '12345678');
+    await tester.tap(find.text('发送配网信息'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('继续等待一次'), findsOneWidget);
   });
 }

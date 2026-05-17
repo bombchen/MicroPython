@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../application/pairing_controller.dart';
 import '../application/pairing_coordinator.dart';
+import '../application/pairing_failure.dart';
 import '../domain/pairing_step.dart';
 
 enum PairingFlowResult {
@@ -173,14 +174,12 @@ class _PairingPageState extends ConsumerState<PairingPage> {
             onPressed: () async {
               final ssid = _ssidController.text.trim();
               final password = _passwordController.text.trim();
-              setState(() {
-                _controller.markWaitingReconnect(ssid, password);
-              });
-              await _controller.submitCredentials(
+              final future = _controller.submitCredentials(
                 ssid: ssid,
                 password: password,
-                markWaiting: false,
               );
+              setState(() {});
+              await future;
               if (!mounted) {
                 return;
               }
@@ -188,6 +187,14 @@ class _PairingPageState extends ConsumerState<PairingPage> {
             },
             child: const Text('发送配网信息'),
           ),
+        ];
+      case PairingStep.sendingConfig:
+        return [
+          const Center(child: CircularProgressIndicator()),
+          const SizedBox(height: 16),
+          const Text('正在发送配网信息'),
+          const SizedBox(height: 12),
+          Text('目标 WiFi：${_controller.state.ssid}'),
         ];
       case PairingStep.waitingReconnect:
         return [
@@ -213,6 +220,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
           ),
         ];
       case PairingStep.failure:
+        final failureType = _controller.state.failureType;
         return [
           const Text('配网失败'),
           const SizedBox(height: 12),
@@ -228,13 +236,42 @@ class _PairingPageState extends ConsumerState<PairingPage> {
             SelectableText(diagnostics),
           ],
           const SizedBox(height: 24),
-          FilledButton(
-            onPressed: () {
-              setState(_controller.returnToApReconnect);
-            },
-            child: const Text('重新连接设备热点'),
-          ),
-          const SizedBox(height: 12),
+          if (failureType == PairingFailureType.configSendFailed) ...[
+            FilledButton(
+              onPressed: () async {
+                final future = _controller.retrySubmitCredentials();
+                setState(() {});
+                await future;
+                if (!mounted) {
+                  return;
+                }
+                setState(() {});
+              },
+              child: const Text('重试发送配网信息'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () {
+                setState(_controller.returnToWifiForm);
+              },
+              child: const Text('返回 WiFi 表单'),
+            ),
+            const SizedBox(height: 12),
+          ] else if (failureType == PairingFailureType.reconnectTimedOut) ...[
+            FilledButton(
+              onPressed: () async {
+                final future = _controller.continueWaitingReconnect();
+                setState(() {});
+                await future;
+                if (!mounted) {
+                  return;
+                }
+                setState(() {});
+              },
+              child: const Text('继续等待一次'),
+            ),
+            const SizedBox(height: 12),
+          ],
           OutlinedButton(
             onPressed: () {
               setState(_controller.moveToApJoin);
@@ -254,6 +291,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
       case PairingStep.returnToApp:
         return '步骤 3/5';
       case PairingStep.enterWifi:
+      case PairingStep.sendingConfig:
       case PairingStep.failure:
         return '步骤 4/5';
       case PairingStep.waitingReconnect:
@@ -272,6 +310,8 @@ class _PairingPageState extends ConsumerState<PairingPage> {
         return '返回 APP 确认';
       case PairingStep.enterWifi:
         return '输入家庭 WiFi';
+      case PairingStep.sendingConfig:
+        return '发送家庭 WiFi';
       case PairingStep.waitingReconnect:
         return '等待设备重启';
       case PairingStep.success:
@@ -291,6 +331,8 @@ class _PairingPageState extends ConsumerState<PairingPage> {
         return '确认手机已经连接到设备热点后，再继续发送家庭 WiFi。';
       case PairingStep.enterWifi:
         return 'APP 会通过 UDP 8889 将家庭 WiFi 信息发送给设备。';
+      case PairingStep.sendingConfig:
+        return '正在通过 UDP 8889 发送家庭 WiFi 信息。';
       case PairingStep.waitingReconnect:
         return '设备会断开热点并重新尝试接入你的局域网。';
       case PairingStep.success:

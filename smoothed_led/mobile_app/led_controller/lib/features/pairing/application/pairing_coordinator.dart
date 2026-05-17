@@ -29,10 +29,12 @@ abstract class PairingCoordinator {
 
   Future<void> resetConfiguration();
 
-  Future<String> submitCredentials({
+  Future<void> sendCredentials({
     required String ssid,
     required String password,
   });
+
+  Future<String> waitForDeviceRegistration();
 }
 
 class DefaultPairingCoordinator implements PairingCoordinator {
@@ -64,12 +66,15 @@ class DefaultPairingCoordinator implements PairingCoordinator {
   }
 
   @override
-  Future<String> submitCredentials({
+  Future<void> sendCredentials({
     required String ssid,
     required String password,
   }) async {
     await _sendProvisioningPayload('config:$ssid:$password');
+  }
 
+  @override
+  Future<String> waitForDeviceRegistration() async {
     final startSnapshot = await localNetworkDiagnostics.capture();
     final ip = await pairingProbeService.resolveDeviceIp();
     if (ip == null) {

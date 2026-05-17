@@ -7,8 +7,10 @@ import 'package:led_controller/features/pairing/domain/pairing_step.dart';
 
 class FakePairingCoordinator implements PairingCoordinator {
   bool didOpenWifi = false;
-  bool didSubmit = false;
-  Object? submitError;
+  bool didSendCredentials = false;
+  bool didWaitForRegistration = false;
+  Object? sendError;
+  Object? waitError;
 
   @override
   Future<void> openWifiSettings() async {
@@ -19,13 +21,21 @@ class FakePairingCoordinator implements PairingCoordinator {
   Future<void> resetConfiguration() async {}
 
   @override
-  Future<String> submitCredentials({
+  Future<void> sendCredentials({
     required String ssid,
     required String password,
   }) async {
-    didSubmit = true;
-    if (submitError != null) {
-      throw submitError!;
+    didSendCredentials = true;
+    if (sendError != null) {
+      throw sendError!;
+    }
+  }
+
+  @override
+  Future<String> waitForDeviceRegistration() async {
+    didWaitForRegistration = true;
+    if (waitError != null) {
+      throw waitError!;
     }
     return '192.168.1.23';
   }
@@ -43,8 +53,8 @@ void main() {
     controller.confirmApJoined();
     expect(controller.state.step, PairingStep.enterWifi);
 
-    controller.markWaitingReconnect('LED_Config', 'secret123');
-    expect(controller.state.step, PairingStep.waitingReconnect);
+    controller.markSendingConfig('LED_Config', 'secret123');
+    expect(controller.state.step, PairingStep.sendingConfig);
     expect(controller.state.ssid, 'LED_Config');
     expect(controller.state.password, 'secret123');
   });
@@ -79,7 +89,8 @@ void main() {
 
     expect(controller.state.step, PairingStep.success);
     expect(controller.state.resolvedIpAddress, '192.168.1.23');
-    expect(coordinator.didSubmit, isTrue);
+    expect(coordinator.didSendCredentials, isTrue);
+    expect(coordinator.didWaitForRegistration, isTrue);
   });
 
   test('打开 WiFi 设置后进入返回 APP 步骤', () async {
@@ -94,7 +105,7 @@ void main() {
 
   test('提交 WiFi 失败后进入失败状态并清空旧 IP', () async {
     final coordinator = FakePairingCoordinator()
-      ..submitError = Exception('配网超时');
+      ..sendError = Exception('配网超时');
     final controller = PairingController(coordinator: coordinator);
 
     await controller.submitCredentials(
@@ -105,12 +116,14 @@ void main() {
     expect(controller.state.step, PairingStep.failure);
     expect(controller.state.errorMessage, contains('配网超时'));
     expect(controller.state.resolvedIpAddress, isNull);
-    expect(coordinator.didSubmit, isTrue);
+    expect(controller.state.failureType, PairingFailureType.configSendFailed);
+    expect(coordinator.didSendCredentials, isTrue);
+    expect(coordinator.didWaitForRegistration, isFalse);
   });
 
   test('提交 WiFi 失败且包含诊断后保留独立诊断信息', () async {
     final coordinator = FakePairingCoordinator()
-      ..submitError = const PairingFailure(
+      ..waitError = const PairingFailure(
         message: '设备未在配网窗口内返回局域网',
         diagnostics: '开始探测: 192.168.4.2',
       );
@@ -124,6 +137,7 @@ void main() {
     expect(controller.state.step, PairingStep.failure);
     expect(controller.state.errorMessage, '设备未在配网窗口内返回局域网');
     expect(controller.state.diagnosticsMessage, contains('192.168.4.2'));
+    expect(controller.state.failureType, PairingFailureType.reconnectTimedOut);
   });
 
   test('从返回 APP 步骤确认后进入 WiFi 表单页', () {
@@ -139,7 +153,7 @@ void main() {
   test('重试提交前会回到重新连接热点步骤并保留已输入内容', () {
     final controller = PairingController();
 
-    controller.markWaitingReconnect('HomeWiFi', '12345678');
+    controller.markSendingConfig('HomeWiFi', '12345678');
     controller.returnToApReconnect();
 
     expect(controller.state.step, PairingStep.returnToApp);

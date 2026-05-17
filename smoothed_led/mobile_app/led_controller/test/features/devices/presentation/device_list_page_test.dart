@@ -10,11 +10,16 @@ import 'package:led_controller/features/devices/domain/device_status.dart';
 import 'package:led_controller/features/devices/domain/effect_mode.dart';
 import 'package:led_controller/features/devices/domain/led_device.dart';
 import 'package:led_controller/features/devices/presentation/device_list_page.dart';
+import 'dart:async';
 
 class FakeDeviceRepository implements DeviceRepository {
-  FakeDeviceRepository(this.devices);
+  FakeDeviceRepository(
+    this.devices, {
+    DateTime? statusUpdatedAt,
+  }) : statusUpdatedAt = statusUpdatedAt ?? DateTime(2026, 4, 24, 21, 30);
 
   final List<LedDevice> devices;
+  final DateTime statusUpdatedAt;
 
   @override
   Future<List<LedDevice>> loadDevices() async => devices;
@@ -33,7 +38,17 @@ class FakeDeviceRepository implements DeviceRepository {
   }
 
   @override
-  Future<void> updateDeviceStatus(String id, DeviceStatus status) async {}
+  Future<void> updateDeviceStatus(String id, DeviceStatus status) async {
+    final index = devices.indexWhere((item) => item.id == id);
+    if (index == -1) {
+      return;
+    }
+    devices[index] = devices[index].copyWith(
+      lastKnownStatus: status,
+      lastSeenAt: statusUpdatedAt,
+      updatedAt: statusUpdatedAt,
+    );
+  }
 }
 
 class ThrowingDeviceRepository implements DeviceRepository {
@@ -53,6 +68,13 @@ class ThrowingDeviceRepository implements DeviceRepository {
 }
 
 class FakeUdpClient implements UdpClient {
+  FakeUdpClient({
+    List<Object>? sendResults,
+  }) : sendResults = sendResults ?? <Object>['MODE:fire;BRIGHT:180'];
+
+  final List<Object> sendResults;
+  final List<String> payloads = <String>[];
+
   @override
   Future<String> send({
     required String host,
@@ -60,7 +82,18 @@ class FakeUdpClient implements UdpClient {
     required String payload,
     Duration timeout = const Duration(seconds: 2),
   }) async {
-    return 'MODE:fire;BRIGHT:180';
+    payloads.add('$host:$port:$payload');
+    if (sendResults.isEmpty) {
+      return 'MODE:fire;BRIGHT:180';
+    }
+    final result = sendResults.removeAt(0);
+    if (result is Exception) {
+      throw result;
+    }
+    if (result is Error) {
+      throw result;
+    }
+    return result as String;
   }
 
   @override
@@ -85,10 +118,13 @@ class FakePairingCoordinator implements PairingCoordinator {
   Future<void> resetConfiguration() async {}
 
   @override
-  Future<String> submitCredentials({
+  Future<void> sendCredentials({
     required String ssid,
     required String password,
-  }) async {
+  }) async {}
+
+  @override
+  Future<String> waitForDeviceRegistration() async {
     final now = DateTime(2026, 4, 25, 12);
     await repository.saveDevice(
       LedDevice(
@@ -174,6 +210,94 @@ void main() {
 
     expect(find.text('客厅灯带'), findsOneWidget);
     expect(find.text('192.168.1.23'), findsOneWidget);
+  });
+
+  testWidgets('设备列表页进入后自动刷新状态并展示最近同步时间', (tester) async {
+    final devices = [
+      LedDevice(
+        id: 'device-1',
+        name: '客厅灯带',
+        ipAddress: '192.168.1.23',
+        lastSeenAt: DateTime(2026, 4, 24, 21),
+        lastKnownStatus: const DeviceStatus(
+          mode: EffectMode.fire,
+          brightness: 180,
+          connectionState: DeviceConnectionState.offline,
+        ),
+        createdAt: DateTime(2026, 4, 24, 20),
+        updatedAt: DateTime(2026, 4, 24, 21),
+      ),
+    ];
+    final repository = FakeDeviceRepository(
+      devices,
+      statusUpdatedAt: DateTime(2026, 4, 24, 21, 30),
+    );
+    final udpClient = FakeUdpClient(
+      sendResults: <Object>['MODE:rainbow;BRIGHT:180'],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceRepositoryProvider.overrideWithValue(repository),
+          udpClientProvider.overrideWithValue(udpClient),
+        ],
+        child: const MaterialApp(home: DeviceListPage()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(udpClient.payloads, contains('192.168.1.23:8888:status'));
+    expect(find.text('在线'), findsOneWidget);
+    expect(find.text('最近同步: 2026-04-24 21:30'), findsOneWidget);
+  });
+
+  testWidgets('设备列表页支持手动刷新并展示超时结果', (tester) async {
+    final devices = [
+      LedDevice(
+        id: 'device-1',
+        name: '客厅灯带',
+        ipAddress: '192.168.1.23',
+        lastSeenAt: DateTime(2026, 4, 24, 21),
+        lastKnownStatus: const DeviceStatus(
+          mode: EffectMode.fire,
+          brightness: 180,
+          connectionState: DeviceConnectionState.offline,
+        ),
+        createdAt: DateTime(2026, 4, 24, 20),
+        updatedAt: DateTime(2026, 4, 24, 21),
+      ),
+    ];
+    final repository = FakeDeviceRepository(devices);
+    final udpClient = FakeUdpClient(
+      sendResults: <Object>[
+        'MODE:rainbow;BRIGHT:180',
+        TimeoutException('timeout'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          deviceRepositoryProvider.overrideWithValue(repository),
+          udpClientProvider.overrideWithValue(udpClient),
+        ],
+        child: const MaterialApp(home: DeviceListPage()),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+    expect(find.text('在线'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('刷新设备状态'));
+    await tester.pumpAndSettle();
+
+    expect(udpClient.payloads, <String>[
+      '192.168.1.23:8888:status',
+      '192.168.1.23:8888:status',
+    ]);
+    expect(find.text('超时'), findsOneWidget);
   });
 
   testWidgets('点击已保存设备后进入控制页', (tester) async {

@@ -1,4 +1,5 @@
 import 'pairing_step.dart';
+import '../application/pairing_failure.dart';
 
 class PairingState {
   static const Object _unset = Object();
@@ -10,6 +11,7 @@ class PairingState {
     this.errorMessage,
     this.diagnosticsMessage,
     this.resolvedIpAddress,
+    this.failureType,
   });
 
   final PairingStep step;
@@ -18,6 +20,7 @@ class PairingState {
   final String? errorMessage;
   final String? diagnosticsMessage;
   final String? resolvedIpAddress;
+  final PairingFailureType? failureType;
 
   PairingState copyWith({
     PairingStep? step,
@@ -26,6 +29,7 @@ class PairingState {
     Object? errorMessage = _unset,
     Object? diagnosticsMessage = _unset,
     Object? resolvedIpAddress = _unset,
+    Object? failureType = _unset,
   }) {
     return PairingState(
       step: step ?? this.step,
@@ -40,6 +44,9 @@ class PairingState {
       resolvedIpAddress: identical(resolvedIpAddress, _unset)
           ? this.resolvedIpAddress
           : resolvedIpAddress as String?,
+      failureType: identical(failureType, _unset)
+          ? this.failureType
+          : failureType as PairingFailureType?,
     );
   }
 }

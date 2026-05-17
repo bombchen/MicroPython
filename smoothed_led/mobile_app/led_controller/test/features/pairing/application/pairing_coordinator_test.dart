@@ -143,7 +143,10 @@ void main() {
     );
 
     expect(
-      () => coordinator.submitCredentials(ssid: 'HomeWiFi', password: 'secret'),
+      () async {
+        await coordinator.sendCredentials(ssid: 'HomeWiFi', password: 'secret');
+        await coordinator.waitForDeviceRegistration();
+      },
       throwsA(
         isA<PairingFailure>()
             .having((error) => error.message, 'message', '设备未在配网窗口内返回局域网')
@@ -179,10 +182,11 @@ void main() {
       ),
     );
 
-    final ip = await coordinator.submitCredentials(
+    await coordinator.sendCredentials(
       ssid: 'HomeWiFi',
       password: 'secret',
     );
+    final ip = await coordinator.waitForDeviceRegistration();
 
     expect(ip, '192.168.1.45');
     expect(

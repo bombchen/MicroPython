@@ -34,6 +34,7 @@ class PairingController {
       step: PairingStep.enterWifi,
       errorMessage: null,
       diagnosticsMessage: null,
+      failureType: null,
     );
   }
 
@@ -43,55 +44,101 @@ class PairingController {
       errorMessage: null,
       diagnosticsMessage: null,
       resolvedIpAddress: null,
+      failureType: null,
     );
   }
 
-  void markWaitingReconnect(String ssid, String password) {
+  void markSendingConfig(String ssid, String password) {
     _state = _state.copyWith(
-      step: PairingStep.waitingReconnect,
+      step: PairingStep.sendingConfig,
       ssid: ssid,
       password: password,
       errorMessage: null,
       diagnosticsMessage: null,
       resolvedIpAddress: null,
+      failureType: null,
+    );
+  }
+
+  void markWaitingReconnect() {
+    _state = _state.copyWith(
+      step: PairingStep.waitingReconnect,
+      errorMessage: null,
+      diagnosticsMessage: null,
+      resolvedIpAddress: null,
+      failureType: null,
     );
   }
 
   Future<void> submitCredentials({
     required String ssid,
     required String password,
-    bool markWaiting = true,
   }) async {
-    if (markWaiting) {
-      markWaitingReconnect(ssid, password);
-    }
+    markSendingConfig(ssid, password);
 
     try {
-      final ip = await _coordinator.submitCredentials(
+      await _coordinator.sendCredentials(
         ssid: ssid,
         password: password,
       );
+    } catch (error) {
+      _fail(
+        message: '$error',
+        diagnostics: null,
+        failureType: PairingFailureType.configSendFailed,
+      );
+      return;
+    }
+
+    await continueWaitingReconnect();
+  }
+
+  Future<void> retrySubmitCredentials() async {
+    await submitCredentials(
+      ssid: _state.ssid,
+      password: _state.password,
+    );
+  }
+
+  Future<void> continueWaitingReconnect() async {
+    markWaitingReconnect();
+
+    try {
+      final ip = await _coordinator.waitForDeviceRegistration();
       _state = _state.copyWith(
         step: PairingStep.success,
         resolvedIpAddress: ip,
         errorMessage: null,
         diagnosticsMessage: null,
+        failureType: null,
       );
     } on PairingFailure catch (error) {
-      _state = _state.copyWith(
-        step: PairingStep.failure,
-        errorMessage: error.message,
-        diagnosticsMessage: error.diagnostics,
-        resolvedIpAddress: null,
+      _fail(
+        message: error.message,
+        diagnostics: error.diagnostics,
+        failureType: PairingFailureType.reconnectTimedOut,
       );
     } catch (error) {
-      _state = _state.copyWith(
-        step: PairingStep.failure,
-        errorMessage: '$error',
-        diagnosticsMessage: null,
-        resolvedIpAddress: null,
+      _fail(
+        message: '$error',
+        diagnostics: null,
+        failureType: PairingFailureType.reconnectTimedOut,
       );
     }
+  }
+
+  void _fail({
+    required String message,
+    required String? diagnostics,
+    required PairingFailureType failureType,
+  }) {
+    _state = _state.copyWith(
+      step: PairingStep.failure,
+      errorMessage: message,
+      diagnosticsMessage: diagnostics,
+      resolvedIpAddress: null,
+      failureType: failureType,
+    );
   }
 }
 
@@ -109,10 +156,15 @@ class _MissingPairingCoordinator implements PairingCoordinator {
   }
 
   @override
-  Future<String> submitCredentials({
+  Future<void> sendCredentials({
     required String ssid,
     required String password,
   }) {
+    throw StateError('PairingCoordinator is required for runtime actions');
+  }
+
+  @override
+  Future<String> waitForDeviceRegistration() {
     throw StateError('PairingCoordinator is required for runtime actions');
   }
 }

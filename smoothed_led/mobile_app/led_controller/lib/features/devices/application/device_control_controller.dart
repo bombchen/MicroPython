@@ -3,20 +3,11 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/network/io_udp_client.dart';
 import '../../../core/network/udp_client.dart';
 import '../../../core/network/udp_led_protocol.dart';
 import '../domain/device_repository.dart';
 import '../domain/device_status.dart';
 import '../domain/effect_mode.dart';
-
-final udpClientProvider = Provider<UdpClient>((ref) {
-  return IoUdpClient();
-});
-
-final udpLedProtocolProvider = Provider<UdpLedProtocol>((ref) {
-  return UdpLedProtocol();
-});
 
 class DeviceControlController extends StateNotifier<AsyncValue<DeviceStatus>> {
   DeviceControlController(

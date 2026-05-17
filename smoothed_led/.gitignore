@@ -1,1 +1,3 @@
 /.superpowers/
+tests/
+__pycache__/

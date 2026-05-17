@@ -1,3 +1,8 @@
+enum PairingFailureType {
+  configSendFailed,
+  reconnectTimedOut,
+}
+
 class PairingFailure implements Exception {
   const PairingFailure({
     required this.message,

@@ -16,12 +16,13 @@ class FakePairingCoordinator implements PairingCoordinator {
   }
 
   @override
-  Future<String> submitCredentials({
+  Future<void> sendCredentials({
     required String ssid,
     required String password,
-  }) async {
-    return '192.168.1.45';
-  }
+  }) async {}
+
+  @override
+  Future<String> waitForDeviceRegistration() async => '192.168.1.45';
 }
 
 void main() {
