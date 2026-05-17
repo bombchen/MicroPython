@@ -48,6 +48,21 @@ class FakePairingCoordinator implements PairingCoordinator {
 }
 
 void main() {
+  testWidgets('配网页面展示步骤头部和引导副标题', (tester) async {
+    final coordinator = FakePairingCoordinator();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PairingPage(
+          controller: PairingController(coordinator: coordinator),
+        ),
+      ),
+    );
+
+    expect(find.text('添加新的灯带设备'), findsOneWidget);
+    expect(find.textContaining('跟着步骤完成连接'), findsOneWidget);
+  });
+
   testWidgets('进入 WiFi 表单时默认填充测试用 SSID 和密码', (tester) async {
     final coordinator = FakePairingCoordinator();
 
@@ -107,7 +122,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).at(1), '12345678');
     await tester.tap(find.text('发送配网信息'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('完成'));
+    await tester.tap(find.text('开始控制设备'));
     await tester.pumpAndSettle();
 
     expect(result, PairingFlowResult.paired);
@@ -303,5 +318,30 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('继续等待一次'), findsOneWidget);
+  });
+
+  testWidgets('配网成功页展示开始控制设备按钮', (tester) async {
+    final coordinator = FakePairingCoordinator();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PairingPage(
+          controller: PairingController(coordinator: coordinator),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('开始配网'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('打开系统 WiFi 设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('我已连接，继续'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField).at(0), 'HomeWiFi');
+    await tester.enterText(find.byType(TextFormField).at(1), '12345678');
+    await tester.tap(find.text('发送配网信息'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('开始控制设备'), findsOneWidget);
   });
 }

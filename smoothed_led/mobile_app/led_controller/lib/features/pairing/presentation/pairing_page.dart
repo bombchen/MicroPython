@@ -76,21 +76,55 @@ class _PairingPageState extends ConsumerState<PairingPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('添加设备')),
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         children: [
-          Text(
-            _stepTitle(state.step),
-            style: Theme.of(context).textTheme.titleMedium,
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '添加新的灯带设备',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '跟着步骤完成连接，通常只需要几十秒。',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _stepTitle(state.step),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(
+                    value: _stepNumber(state.step) / 5,
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(
-            _stepHeading(state.step),
-            style: Theme.of(context).textTheme.headlineSmall,
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _stepHeading(state.step),
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(_stepDescription(state.step)),
+                  const SizedBox(height: 24),
+                  ..._buildStepContent(context, state.step),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(_stepDescription(state.step)),
-          const SizedBox(height: 24),
-          ..._buildStepContent(context, state.step),
         ],
       ),
     );
@@ -208,6 +242,10 @@ class _PairingPageState extends ConsumerState<PairingPage> {
         ];
       case PairingStep.success:
         return [
+          const Center(
+            child: Icon(Icons.check_circle_outline, size: 56),
+          ),
+          const SizedBox(height: 16),
           const Text('配网成功'),
           const SizedBox(height: 12),
           Text('设备 IP：${_controller.state.resolvedIpAddress ?? '-'}'),
@@ -216,7 +254,7 @@ class _PairingPageState extends ConsumerState<PairingPage> {
             onPressed: () {
               Navigator.of(context).pop(PairingFlowResult.paired);
             },
-            child: const Text('完成'),
+            child: const Text('开始控制设备'),
           ),
         ];
       case PairingStep.failure:
@@ -339,6 +377,24 @@ class _PairingPageState extends ConsumerState<PairingPage> {
         return '现在可以返回设备列表，进入控制页。';
       case PairingStep.failure:
         return '保留已输入内容，方便你原地重试。';
+    }
+  }
+
+  int _stepNumber(PairingStep step) {
+    switch (step) {
+      case PairingStep.prepare:
+        return 1;
+      case PairingStep.joinAp:
+        return 2;
+      case PairingStep.returnToApp:
+        return 3;
+      case PairingStep.enterWifi:
+      case PairingStep.sendingConfig:
+      case PairingStep.failure:
+        return 4;
+      case PairingStep.waitingReconnect:
+      case PairingStep.success:
+        return 5;
     }
   }
 
