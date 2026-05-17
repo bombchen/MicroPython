@@ -75,6 +75,25 @@ LedDevice buildDevice() {
 }
 
 void main() {
+  testWidgets('控制页展示设备头卡和主控制区', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          udpClientProvider.overrideWithValue(FakeUdpClient()),
+          deviceRepositoryProvider.overrideWithValue(FakeDeviceRepository()),
+        ],
+        child: MaterialApp(
+          home: DeviceControlPage(device: buildDevice()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('设备状态'), findsOneWidget);
+    expect(find.text('亮度调节'), findsOneWidget);
+    expect(find.text('常用灯效'), findsOneWidget);
+  });
+
   testWidgets('控制页进入后自动刷新并展示最新状态', (tester) async {
     final udpClient = FakeUdpClient();
 
@@ -118,6 +137,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('下一个灯效'), 200);
     await tester.tap(find.text('下一个灯效'));
     await tester.pumpAndSettle();
 
@@ -192,7 +212,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.edit_outlined));
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('重命名设备'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField), '书房灯带');
     await tester.tap(find.text('保存'));
@@ -218,11 +240,34 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byIcon(Icons.delete_outline));
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('删除设备'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('删除'));
     await tester.pumpAndSettle();
 
     expect(repository.deletedDeviceId, 'device-1');
+  });
+
+  testWidgets('控制页通过更多菜单暴露重命名和删除', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          udpClientProvider.overrideWithValue(FakeUdpClient()),
+          deviceRepositoryProvider.overrideWithValue(FakeDeviceRepository()),
+        ],
+        child: MaterialApp(
+          home: DeviceControlPage(device: buildDevice()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.more_horiz));
+    await tester.pumpAndSettle();
+
+    expect(find.text('重命名设备'), findsOneWidget);
+    expect(find.text('删除设备'), findsOneWidget);
   });
 }

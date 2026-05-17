@@ -86,116 +86,166 @@ class _DeviceControlPageState extends ConsumerState<DeviceControlPage> {
       appBar: AppBar(
         title: Text(_device.name),
         actions: [
-          IconButton(
-            onPressed: _renameDevice,
-            icon: const Icon(Icons.edit_outlined),
-          ),
-          IconButton(
-            onPressed: _deleteDevice,
-            icon: const Icon(Icons.delete_outline),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_horiz),
+            onSelected: (value) {
+              if (value == 'rename') {
+                _renameDevice();
+              } else if (value == 'delete') {
+                _deleteDevice();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem<String>(
+                value: 'rename',
+                child: Text('重命名设备'),
+              ),
+              PopupMenuItem<String>(
+                value: 'delete',
+                child: Text('删除设备'),
+              ),
+            ],
           ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         children: [
-          _DeviceSummaryCard(
-            ipAddress: _device.ipAddress,
-            statusLabel: _statusLabel(status.connectionState),
-            statusColor: _statusColor(context, status.connectionState),
-            lastSyncLabel: _formatDateTime(_device.lastSeenAt),
+          _SectionCard(
+            title: '设备状态',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 8,
+                  children: [
+                    Chip(
+                      label: Text(_statusLabel(status.connectionState)),
+                      backgroundColor: _statusColor(
+                        context,
+                        status.connectionState,
+                      ).withOpacity(0.12),
+                    ),
+                    Text('最近同步: ${_formatDateTime(_device.lastSeenAt)}'),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text('IP: ${_device.ipAddress}'),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              FilledButton.icon(
-                onPressed: isBusy
-                    ? null
-                    : () => _controller.refresh(_device.ipAddress),
-                icon: const Icon(Icons.refresh),
-                label: const Text('刷新状态'),
-              ),
-              const SizedBox(width: 12),
-              if (isLoading || isSending)
-                const Expanded(child: LinearProgressIndicator()),
-            ],
-          ),
-          if (_controlState is AsyncError<DeviceStatus>) ...[
-            const SizedBox(height: 12),
-            const Text('设备响应异常，请稍后重试。'),
-          ],
-          const SizedBox(height: 24),
-          Text(
-            '当前模式',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _modeLabel(status.mode),
-            style: Theme.of(context).textTheme.headlineSmall,
+          _SectionCard(
+            title: '当前模式',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _modeLabel(status.mode),
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 12),
+                if (_controlState is AsyncError<DeviceStatus>)
+                  const Text('设备暂时没有响应，你可以稍后重试。'),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: EffectMode.values.map((mode) {
-              return ChoiceChip(
-                label: Text(_modeLabel(mode)),
-                selected: status.mode == mode,
-                onSelected: isBusy
-                    ? null
-                    : (_) => _controller.setMode(_device.ipAddress, mode),
-              );
-            }).toList(),
+          _SectionCard(
+            title: '亮度调节',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${(_pendingBrightness ?? status.brightness.toDouble()).round()}',
+                ),
+                Slider(
+                  value: (_pendingBrightness ?? status.brightness.toDouble())
+                      .clamp(0, 255)
+                      .toDouble(),
+                  min: 0,
+                  max: 255,
+                  divisions: 255,
+                  label:
+                      '${(_pendingBrightness ?? status.brightness.toDouble()).round()}',
+                  onChanged: isBusy
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _pendingBrightness = value;
+                          });
+                        },
+                  onChangeEnd: isBusy
+                      ? null
+                      : (value) {
+                          _controller.setBrightness(
+                            _device.ipAddress,
+                            value.round(),
+                          );
+                        },
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              OutlinedButton(
-                onPressed: isBusy
-                    ? null
-                    : () => _controller.previousMode(_device.ipAddress),
-                child: const Text('上一个灯效'),
-              ),
-              const SizedBox(width: 12),
-              OutlinedButton(
-                onPressed: isBusy
-                    ? null
-                    : () => _controller.nextMode(_device.ipAddress),
-                child: const Text('下一个灯效'),
-              ),
-            ],
+          _SectionCard(
+            title: '常用灯效',
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: EffectMode.values.map((mode) {
+                return ChoiceChip(
+                  label: Text(_modeLabel(mode)),
+                  selected: status.mode == mode,
+                  onSelected: isBusy
+                      ? null
+                      : (_) => _controller.setMode(_device.ipAddress, mode),
+                );
+              }).toList(),
+            ),
           ),
-          const SizedBox(height: 24),
-          Text(
-            '亮度',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 8),
-          Text('${(_pendingBrightness ?? status.brightness.toDouble()).round()}'),
-          Slider(
-            value: (_pendingBrightness ?? status.brightness.toDouble())
-                .clamp(0, 255)
-                .toDouble(),
-            min: 0,
-            max: 255,
-            divisions: 255,
-            label: '${(_pendingBrightness ?? status.brightness.toDouble()).round()}',
-            onChanged: isBusy
-                ? null
-                : (value) {
-                    setState(() {
-                      _pendingBrightness = value;
-                    });
-                  },
-            onChangeEnd: isBusy
-                ? null
-                : (value) {
-                    _controller.setBrightness(
-                      _device.ipAddress,
-                      value.round(),
-                    );
-                  },
+          const SizedBox(height: 16),
+          _SectionCard(
+            title: '更多操作',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton.icon(
+                  onPressed: isBusy
+                      ? null
+                      : () => _controller.refresh(_device.ipAddress),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('刷新状态'),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: isBusy
+                            ? null
+                            : () => _controller.previousMode(_device.ipAddress),
+                        child: const Text('上一个灯效'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: isBusy
+                            ? null
+                            : () => _controller.nextMode(_device.ipAddress),
+                        child: const Text('下一个灯效'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (isLoading || isSending) ...[
+                  const SizedBox(height: 12),
+                  const LinearProgressIndicator(),
+                ],
+              ],
+            ),
           ),
         ],
       ),
@@ -347,40 +397,29 @@ class _DeviceControlPageState extends ConsumerState<DeviceControlPage> {
   }
 }
 
-class _DeviceSummaryCard extends StatelessWidget {
-  const _DeviceSummaryCard({
-    required this.ipAddress,
-    required this.statusLabel,
-    required this.statusColor,
-    required this.lastSyncLabel,
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({
+    required this.title,
+    required this.child,
   });
 
-  final String ipAddress;
-  final String statusLabel;
-  final Color statusColor;
-  final String lastSyncLabel;
+  final String title;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('IP: $ipAddress'),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 12,
-              runSpacing: 8,
-              children: [
-                Chip(
-                  label: Text(statusLabel),
-                  backgroundColor: statusColor.withOpacity(0.12),
-                ),
-                Text('最近同步: $lastSyncLabel'),
-              ],
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium,
             ),
+            const SizedBox(height: 12),
+            child,
           ],
         ),
       ),
