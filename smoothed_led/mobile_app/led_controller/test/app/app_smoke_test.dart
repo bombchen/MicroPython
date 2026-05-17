@@ -51,8 +51,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('我的设备'), findsOneWidget);
+    expect(find.text('我的灯光'), findsOneWidget);
     expect(find.text('还没有设备'), findsOneWidget);
-    expect(find.text('添加设备'), findsOneWidget);
+    expect(find.text('添加第一台灯带'), findsOneWidget);
   });
 }

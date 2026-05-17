@@ -156,7 +156,7 @@ Future<void> completePairingHappyPath(WidgetTester tester) async {
   await tester.enterText(find.byType(TextFormField).at(1), '12345678');
   await tester.tap(find.text('发送配网信息'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('完成'));
+  await tester.tap(find.text('开始控制设备'));
   await tester.pumpAndSettle();
 }
 
@@ -354,7 +354,7 @@ void main() {
     await tester.tap(find.byIcon(Icons.tune_outlined));
     await tester.pumpAndSettle();
 
-    expect(find.text('配网帮助'), findsOneWidget);
+    expect(find.text('支持中心'), findsWidgets);
     expect(find.text('配网步骤'), findsOneWidget);
   });
 
@@ -402,9 +402,9 @@ void main() {
     await tester.tap(find.byIcon(Icons.tune_outlined));
     await tester.pumpAndSettle();
 
-    expect(find.text('配网帮助'), findsOneWidget);
+    expect(find.text('支持中心'), findsWidgets);
 
-    await tester.tap(find.text('去添加设备'));
+    await tester.tap(find.text('添加新设备'));
     await tester.pumpAndSettle();
     await completePairingHappyPath(tester);
 
