@@ -125,6 +125,57 @@ void main() {
     expect(find.text('呼吸'), findsWidgets);
   });
 
+  testWidgets('控制页展示音乐律动模式文案', (tester) async {
+    final udpClient = FakeUdpClient();
+    udpClient.responses
+      ..clear()
+      ..addAll(<String>['MODE:music;BRIGHT:120']);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          udpClientProvider.overrideWithValue(udpClient),
+          deviceRepositoryProvider.overrideWithValue(FakeDeviceRepository()),
+        ],
+        child: MaterialApp(
+          home: DeviceControlPage(device: buildDevice()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('音乐律动'), findsWidgets);
+  });
+
+  testWidgets('点击音乐律动后发送 mode:music 命令', (tester) async {
+    final udpClient = FakeUdpClient();
+    udpClient.responses
+      ..clear()
+      ..addAll(<String>[
+        'MODE:rainbow;BRIGHT:180',
+        'ok',
+        'MODE:music;BRIGHT:180',
+      ]);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          udpClientProvider.overrideWithValue(udpClient),
+          deviceRepositoryProvider.overrideWithValue(FakeDeviceRepository()),
+        ],
+        child: MaterialApp(
+          home: DeviceControlPage(device: buildDevice()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('音乐律动'));
+    await tester.pumpAndSettle();
+
+    expect(udpClient.payloads, contains('mode:music'));
+    expect(find.text('音乐律动'), findsWidgets);
+  });
+
   testWidgets('提交重命名后更新页面标题并写回仓储', (tester) async {
     final repository = FakeDeviceRepository();
 

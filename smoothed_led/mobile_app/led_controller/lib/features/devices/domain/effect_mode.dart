@@ -7,4 +7,5 @@ enum EffectMode {
   chase,
   sparkle,
   snake,
+  music,
 }

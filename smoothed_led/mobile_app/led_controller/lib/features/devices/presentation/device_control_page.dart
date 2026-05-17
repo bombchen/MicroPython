@@ -307,6 +307,8 @@ class _DeviceControlPageState extends ConsumerState<DeviceControlPage> {
         return '闪烁';
       case EffectMode.snake:
         return '蛇形';
+      case EffectMode.music:
+        return '音乐律动';
     }
   }
 
